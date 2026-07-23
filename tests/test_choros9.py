@@ -9,6 +9,7 @@ import numpy as np
 from rescore.choros9 import (
     analyze_doublings,
     audit_measure_structure,
+    extract_measure_candidate,
     merge_measure_candidates,
     reconstruct_scanned_rhythm,
 )
@@ -54,6 +55,27 @@ def _four_measure_reference() -> str:
         '<score-partwise version="4.0"><part-list>'
         '<score-part id="P1"><part-name>Piccolo</part-name></score-part>'
         f'</part-list><part id="P1">{"".join(measures)}</part></score-partwise>'
+    )
+
+
+def _opening_score(names: list[str]) -> str:
+    score_parts = "".join(
+        f'<score-part id="P{index}"><part-name>{name}</part-name></score-part>'
+        for index, name in enumerate(names, 1)
+    )
+    parts = "".join(
+        (
+            f'<part id="P{index}"><measure number="1">'
+            "<attributes><divisions>1</divisions></attributes>"
+            "<note><rest/><duration>1</duration><voice>1</voice>"
+            "<type>quarter</type></note></measure></part>"
+        )
+        for index, _ in enumerate(names, 1)
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<score-partwise version="4.0"><part-list>'
+        f"{score_parts}</part-list>{parts}</score-partwise>"
     )
 
 
@@ -271,6 +293,76 @@ class Choros9Tests(unittest.TestCase):
         self.assertEqual(report["measures"], 2)
         self.assertEqual(score["measure_counts"], {"P1": 2, "P2": 2})
         self.assertEqual([event["pitch"] for event in score["events"]], ["C5", "D5"])
+
+    def test_extracts_last_measure_from_full_page_candidate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "first.musicxml"
+            second = root / "second.musicxml"
+            full = root / "full.musicxml"
+            extracted = root / "last.musicxml"
+            first.write_text(_score("C"), encoding="utf-8")
+            second.write_text(_score("D"), encoding="utf-8")
+            merge_measure_candidates([first, second], full)
+            report = extract_measure_candidate(full, extracted, measure_index=-1)
+            score = parse_musicxml(extracted)
+        self.assertEqual(report["source_measure_number"], "2")
+        self.assertEqual(score["measures"], 1)
+        self.assertEqual([event["pitch"] for event in score["events"]], ["D5"])
+
+    def test_merge_pads_staves_omitted_from_one_opening_measure(self):
+        complete_names = [
+            "Picc.",
+            "Fl.",
+            "Htb.",
+            "Cor anglais",
+            "Clar.",
+            "Cl.B.",
+            "Bassons",
+            "C.Bon",
+            "Cors",
+            "Cors",
+            "Pist.",
+            "Trb.",
+            "Trb.",
+            "Tuba",
+            "Timb.",
+            "Voice",
+            "Voice",
+            "Voice",
+            "Voice",
+            "Viol. I",
+            "Viol. II",
+            "Alt.",
+            "Vcl.",
+            "CB.",
+        ]
+        incomplete_names = [
+            *complete_names[:17],
+            "lives",
+            "Voice",
+            "All.",
+            "CB.",
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "first.musicxml"
+            second = root / "second.musicxml"
+            output = root / "merged.musicxml"
+            first.write_text(_opening_score(complete_names), encoding="utf-8")
+            second.write_text(_opening_score(incomplete_names), encoding="utf-8")
+            report = merge_measure_candidates([first, second], output)
+            score = parse_musicxml(output, include_rests=True)
+        self.assertEqual(report["source_part_counts"], [24, 21])
+        self.assertEqual(
+            report["padded_parts"],
+            [
+                {"measure": 2, "part": 18},
+                {"measure": 2, "part": 19},
+                {"measure": 2, "part": 23},
+            ],
+        )
+        self.assertEqual(set(score["measure_counts"].values()), {2})
 
     def test_reinforces_only_detected_structural_bars(self):
         with tempfile.TemporaryDirectory() as directory:

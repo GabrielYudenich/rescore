@@ -83,7 +83,9 @@ def _convert_choros9_pages(
     failures = []
     for page in pages:
         page_output = output / f"page-{page:04d}"
-        page_meter = meter or ("4/4" if page == 3 else None)
+        # The opening remains in 4/4 through PDF page 7. Later pages are not
+        # locked until a printed change or a user-supplied meter is confirmed.
+        page_meter = meter or ("4/4" if 3 <= page <= 7 else None)
         print(f"Choros Nº 9: analisando página {page} em {dpi} dpi...")
         if page_meter and not meter:
             print(f"  fórmula inicial confirmada: {page_meter}")

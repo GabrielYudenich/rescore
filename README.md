@@ -124,6 +124,16 @@ Sem `--pages`, ele pergunta o intervalo. O perfil de digitalização processa as
 páginas separadamente para que uma página difícil não interrompa o lote inteiro.
 Não fixe `--meter` em um intervalo que contenha mudanças de fórmula.
 
+As páginas 3-7 do Choros 9 herdam a fórmula inicial 4/4. O pré-processamento
+também diferencia cunhas musicais normais de anotações manuscritas gigantes:
+somente pares de traços contínuos que atravessam várias pautas são removidos
+antes do OMR. Marcas de ensaio, ligaduras, acentos, quiálteras e crescendos
+confinados a uma pauta são preservados.
+
+O número de compassos reconhecidos também é comparado às barras confirmadas na
+imagem. Uma página curta é relida por compasso; pautas omitidas em um recorte
+são preenchidas na posição correta, sem deslocar as famílias instrumentais.
+
 Quando uma referência manual é fornecida para a abertura do Choros 9, somente os
 três primeiros compassos são considerados verificados. Um quarto compasso
 incompleto é ignorado. O programa expande as pautas condensadas para o modelo de 35

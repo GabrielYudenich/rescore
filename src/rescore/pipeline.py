@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from .musicxml import compare_scores, parse_musicxml, write_canonical
 from .choros9 import (
     analyze_doublings,
     audit_measure_structure,
+    extract_measure_candidate,
     merge_measure_candidates,
 )
 from .normalize import (
@@ -42,6 +44,7 @@ from .scan import (
     reinforce_orchestral_barlines,
     rescale_scan_image,
     split_orchestral_measure_images,
+    suppress_cross_staff_annotations,
 )
 from .tooling import find_audiveris, find_musescore
 
@@ -123,6 +126,7 @@ def _run_scan_aware_audiveris(
     if scan_profile and cached_fallback.is_file() and not force:
         return [cached_fallback]
     primary_error: Exception | None = None
+    short_primary: Path | None = None
     try:
         candidates = run_audiveris(
             audiveris,
@@ -136,6 +140,24 @@ def _run_scan_aware_audiveris(
     except RuntimeError as exc:
         primary_error = exc
         candidates = []
+    if candidates and scan_profile and len(rendered) == 1 and scan_reports:
+        expected_measures = max(
+            0, len(scan_reports[0].get("barline_columns", [])) - 1
+        )
+        recognized_measures = max(
+            (parse_musicxml(candidate)["measures"] for candidate in candidates),
+            default=0,
+        )
+        if expected_measures and recognized_measures < expected_measures:
+            short_primary = max(
+                candidates, key=lambda item: item.stat().st_mtime
+            )
+            primary_error = RuntimeError(
+                "o OMR da página completa reconheceu "
+                f"{recognized_measures} de {expected_measures} compassos "
+                "sustentados pelas barras impressas"
+            )
+            candidates = []
     if candidates or not scan_profile or len(rendered) != 1 or not scan_reports:
         if primary_error and not candidates:
             raise primary_error
@@ -147,7 +169,7 @@ def _run_scan_aware_audiveris(
     )
     chosen: list[Path] = []
     attempts: list[dict] = []
-    for crop in crops:
+    for crop_index, crop in enumerate(crops, 1):
         result: list[Path] = []
         for label, factor in (("native", 1.0), ("upscaled", 7 / 6), ("downscaled", 5 / 6)):
             image = crop
@@ -184,6 +206,23 @@ def _run_scan_aware_audiveris(
             if result:
                 chosen.append(max(result, key=lambda item: item.stat().st_mtime))
                 break
+        if not result and short_primary is not None and crop_index == len(crops):
+            salvaged = fallback_root / "salvaged-last-measure.musicxml"
+            extraction = extract_measure_candidate(
+                short_primary, salvaged, measure_index=-1
+            )
+            chosen.append(salvaged)
+            attempts.append(
+                {
+                    "measure": crop.stem,
+                    "variant": "last-measure-from-full-page",
+                    "image": None,
+                    "success": True,
+                    "error": None,
+                    "extraction": extraction,
+                }
+            )
+            continue
         if not result:
             raise RuntimeError(
                 f"o fallback isolado não reconheceu {crop.stem}; consulte {fallback_root}"
@@ -218,8 +257,16 @@ def _render_omr_pages(
     processed = []
     reports = []
     for raw_page in raw_pages:
+        annotation_cleaned = output_dir / "pages-annotation-cleaned" / raw_page.name
+        annotation_report = suppress_cross_staff_annotations(
+            raw_page, annotation_cleaned
+        )
         destination = output_dir / "pages" / raw_page.name
-        reports.append(reinforce_orchestral_barlines(raw_page, destination))
+        barline_report = reinforce_orchestral_barlines(
+            annotation_cleaned, destination
+        )
+        barline_report["annotation_filter"] = annotation_report
+        reports.append(barline_report)
         processed.append(destination)
     report_path = output_dir / "scan-preprocess.json"
     report_path.write_text(
@@ -283,11 +330,44 @@ def convert_with_musescore(
     if style:
         command.extend(["-S", str(style.resolve())])
     command.extend(["-o", str(destination.resolve()), str(source.resolve())])
-    _run_logged(
-        command,
-        log_path,
-        source.parent,
-    )
+    try:
+        _run_logged(
+            command,
+            log_path,
+            source.parent,
+        )
+    except RuntimeError as exc:
+        # MuseScore/Qt can crash during process shutdown on Windows after the
+        # requested artifact has already been completely written. Accept that
+        # narrow case only after parsing the resulting file by its real format.
+        valid_output = False
+        if destination.is_file() and destination.stat().st_size:
+            try:
+                suffix = destination.suffix.casefold()
+                if suffix == ".mscz":
+                    with zipfile.ZipFile(destination) as archive:
+                        valid_output = (
+                            archive.testzip() is None
+                            and any(
+                                name.casefold().endswith(".mscx")
+                                for name in archive.namelist()
+                            )
+                        )
+                elif suffix == ".pdf":
+                    valid_output = pdf_info(destination)["pages"] > 0
+                elif suffix in {".musicxml", ".xml", ".mxl"}:
+                    parse_musicxml(destination)
+                    valid_output = True
+            except Exception:
+                valid_output = False
+        if not valid_output:
+            raise
+        with log_path.open("a", encoding="utf-8") as log:
+            log.write(
+                "\n\nRECOVERY\n"
+                "MuseScore retornou erro após gravar um artefato estruturalmente "
+                f"válido; o resultado foi preservado.\n{exc}\n"
+            )
     if not destination.is_file():
         raise RuntimeError(f"MuseScore não criou {destination}")
 

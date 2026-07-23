@@ -124,6 +124,19 @@ As páginas são isoladas e cada falha aparece no manifesto do lote. Esse modo �
 resiliente, porém scans manuscritos ou muito degradados exigem consideravelmente mais
 revisão que uma edição digital.
 
+Para validar a abertura confirmada em 4/4 e o filtro de anotações:
+
+```powershell
+python run.py `
+  --profile choros9 `
+  --pdf "Choros N9 (Grade).pdf" `
+  --pages 3-7
+```
+
+As páginas 3-7 herdam 4/4. O relatório `scan-preprocess.json` informa se alguma
+anotação externa foi detectada, sua caixa, continuidade e quantidade de pixels
+removidos.
+
 ## Diagnóstico de problemas
 
 ### O MuseScore informa voz longa ou compasso incompleto

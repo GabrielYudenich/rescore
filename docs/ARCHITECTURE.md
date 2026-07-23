@@ -25,7 +25,8 @@ PDF
 
 - `pages.py`: interpreta intervalos e listas de páginas;
 - `pdf.py`: consulta e renderiza PDF;
-- `scan.py`: reforça barras confirmadas, recorta compassos e amplia tentativas;
+- `scan.py`: filtra anotações externas, reforça barras confirmadas, recorta
+  compassos e amplia tentativas;
 - `pipeline.py`: coordena ferramentas, cache, artefatos e validações;
 - `musicxml.py`: lê, canoniza e compara MusicXML/MXL;
 - `normalize.py`: regras de estrutura, vozes, métricas, claves e instrumentos;
@@ -55,6 +56,14 @@ O recorte por compasso reduz a quantidade de linhas concorrentes que o reconhece
 precisa interpretar. Ele não inventa a posição de uma barra: uma separação só é
 usada quando a estrutura visual oferece evidência suficiente.
 
+Depois do OMR integral, a quantidade de compassos é comparada ao número de
+intervalos entre barras confirmadas. Um resultado curto é rejeitado e ativa o
+recorte isolado. Se apenas o último recorte falhar, mas a leitura integral tiver
+preservado o compasso final entre a última barra interna e a barra dupla, somente
+esse último compasso é reaproveitado. Pautas omitidas em um recorte são alinhadas
+pelas abreviações legíveis e pela ordem orquestral; a posição ausente recebe um
+compasso vazio em vez de deslocar os instrumentos abaixo dela.
+
 O MusicXML do Audiveris preserva a coordenada horizontal de cada cabeça de nota.
 Quando uma linha rápida possui espaçamento visual regular, mas uma duração
 evidentemente impossível desloca as notas seguintes, o perfil escaneado quantiza
@@ -62,6 +71,15 @@ essas coordenadas em uma grade de semicolcheias ou fusas. Alturas não são cria
 Linhas sustentadas e quiálteras reconhecidas ficam fora desse ajuste. O relatório de
 normalização registra quantos eventos foram reposicionados e qualquer símbolo
 impossível descartado.
+
+### Anotações externas
+
+O filtro de digitalização não decide pela aparência isolada de um símbolo. Uma
+cunha só é classificada como anotação externa quando possui dois traços
+diagonais contínuos, inclinações opostas, ápice comum e abertura superior a
+seis espaços de pauta. Isso separa a grande marca manuscrita da página 7 de
+hairpins, acentos, ligaduras, indicações de quiáltera e marcas de ensaio.
+Linhas horizontais da edição são restauradas depois da limpeza.
 
 ## Normalização métrica
 

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+import re
 import statistics
+import unicodedata
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from fractions import Fraction
@@ -67,6 +69,97 @@ CHOROS9_OPENING_REFERENCE_MAP: dict[str, tuple[tuple[str, str | None], ...]] = {
     "P23": (("P34", None),),
     "P24": (("P35", None),),
 }
+
+CHOROS9_OPENING_STAFF_ROLES = (
+    "piccolo",
+    "flute",
+    "oboe",
+    "english-horn",
+    "clarinet",
+    "bass-clarinet",
+    "bassoon",
+    "contrabassoon",
+    "horn",
+    "horn",
+    "trumpet",
+    "trombone",
+    "trombone",
+    "tuba",
+    "timpani",
+    "celesta",
+    "celesta",
+    "harp",
+    "harp",
+    "violin",
+    "violin",
+    "viola",
+    "cello",
+    "bass",
+)
+
+
+def _ocr_staff_role(name: str) -> str | None:
+    text = unicodedata.normalize("NFKD", name.casefold())
+    text = "".join(character for character in text if not unicodedata.combining(character))
+    text = re.sub(r"[^a-z]+", "", text)
+    markers = (
+        ("piccolo", ("pic", "pier")),
+        ("flute", ("fl",)),
+        ("oboe", ("haut", "hlb", "hub")),
+        ("english-horn", ("cang", "corang")),
+        ("bass-clarinet", ("clb", "clarb")),
+        ("clarinet", ("clar", "clnr", "chr")),
+        ("contrabassoon", ("cbon", "cbonn", "cbdon")),
+        ("bassoon", ("bon", "basson")),
+        ("horn", ("cor", "con")),
+        ("trumpet", ("pist", "pin")),
+        ("trombone", ("trb",)),
+        ("tuba", ("tuba", "tub")),
+        ("timpani", ("timb",)),
+        ("celesta", ("cel",)),
+        ("harp", ("hpe", "harp")),
+        ("violin", ("viol", "lives", "iol")),
+        ("viola", ("alt", "all")),
+        ("cello", ("vcl",)),
+        ("bass", ("cb", "cd")),
+    )
+    for role, aliases in markers:
+        if any(text.startswith(alias) for alias in aliases):
+            return role
+    return None
+
+
+def _align_opening_parts(names: list[str]) -> list[int]:
+    """Align incomplete OMR part lists to the fixed 24-staff opening order."""
+    roles = [_ocr_staff_role(name) for name in names]
+    target = CHOROS9_OPENING_STAFF_ROLES
+    source_count = len(roles)
+    target_count = len(target)
+    costs: dict[tuple[int, int], tuple[int, list[int]]] = {}
+
+    def solve(source_index: int, target_index: int) -> tuple[int, list[int]]:
+        key = (source_index, target_index)
+        if key in costs:
+            return costs[key]
+        if source_index == source_count:
+            result = ((target_count - target_index) * 2, [])
+        elif target_count - target_index < source_count - source_index:
+            result = (10**9, [])
+        else:
+            role = roles[source_index]
+            match_penalty = 1 if role is None else 0 if role == target[target_index] else 10
+            matched_cost, matched_path = solve(source_index + 1, target_index + 1)
+            skipped_cost, skipped_path = solve(source_index, target_index + 1)
+            match = (match_penalty + matched_cost, [target_index] + matched_path)
+            skip = (2 + skipped_cost, skipped_path)
+            result = min(match, skip, key=lambda item: item[0])
+        costs[key] = result
+        return result
+
+    cost, mapping = solve(0, 0)
+    if cost >= 10**9 or len(mapping) != source_count:
+        raise ValueError("não foi possível alinhar as pautas reconhecidas à grade de abertura")
+    return mapping
 
 
 def _fraction_text(value: Fraction) -> str:
@@ -640,24 +733,68 @@ def merge_measure_candidates(sources: list[Path], output: Path) -> dict:
         raise ValueError("nenhum compasso foi fornecido para reunião")
     roots = [ET.fromstring(_read_musicxml(source)) for source in sources]
     part_counts = [len(root.findall("part")) for root in roots]
-    if len(set(part_counts)) != 1:
+    maximum_parts = max(part_counts)
+    if len(set(part_counts)) != 1 and maximum_parts != len(CHOROS9_OPENING_STAFF_ROLES):
         raise ValueError(
             "o número de partes variou entre os compassos isolados: "
             + ", ".join(str(value) for value in part_counts)
         )
-    root = copy.deepcopy(roots[0])
+    template_index = part_counts.index(maximum_parts)
+    root = copy.deepcopy(roots[template_index])
     base_parts = root.findall("part")
     source_parts = [item.findall("part") for item in roots]
+    source_names = [
+        {
+            score_part.get("id", ""): score_part.findtext("part-name") or ""
+            for score_part in item.findall("./part-list/score-part")
+        }
+        for item in roots
+    ]
+    alignments = []
+    for index, parts in enumerate(source_parts):
+        if len(parts) == maximum_parts:
+            alignments.append(list(range(maximum_parts)))
+        else:
+            names = [
+                source_names[index].get(part.get("id", ""), "")
+                for part in parts
+            ]
+            alignments.append(_align_opening_parts(names))
+    padded_parts: list[dict] = []
     for part_index, base_part in enumerate(base_parts):
         for measure in list(base_part.findall("measure")):
             base_part.remove(measure)
-        for measure_index, parts in enumerate(source_parts, 1):
-            measures = parts[part_index].findall("measure")
-            if not measures:
-                raise ValueError(
-                    f"a parte {part_index + 1} não contém o compasso isolado {measure_index}"
+        for measure_index, (parts, alignment) in enumerate(
+            zip(source_parts, alignments), 1
+        ):
+            source_part_index = next(
+                (
+                    index
+                    for index, target_part_index in enumerate(alignment)
+                    if target_part_index == part_index
+                ),
+                None,
+            )
+            if source_part_index is None:
+                measure = ET.Element("measure")
+                template_measure = roots[template_index].findall("part")[
+                    part_index
+                ].find("measure")
+                if template_measure is not None:
+                    attributes = template_measure.find("attributes")
+                    if attributes is not None:
+                        measure.append(copy.deepcopy(attributes))
+                padded_parts.append(
+                    {"measure": measure_index, "part": part_index + 1}
                 )
-            measure = copy.deepcopy(measures[0])
+            else:
+                measures = parts[source_part_index].findall("measure")
+                if not measures:
+                    raise ValueError(
+                        f"a parte {source_part_index + 1} não contém "
+                        f"o compasso isolado {measure_index}"
+                    )
+                measure = copy.deepcopy(measures[0])
             measure.set("number", str(measure_index))
             if measure_index > 1:
                 for print_node in list(measure.findall("print")):
@@ -668,8 +805,47 @@ def merge_measure_candidates(sources: list[Path], output: Path) -> dict:
     return {
         "output": str(output.resolve()),
         "measures": len(sources),
-        "parts": part_counts[0],
+        "parts": maximum_parts,
+        "source_part_counts": part_counts,
+        "padded_parts": padded_parts,
         "sources": [str(source.resolve()) for source in sources],
+    }
+
+
+def extract_measure_candidate(
+    source: Path, output: Path, measure_index: int
+) -> dict:
+    """Create a standalone candidate from one measure of a full-page export."""
+    root = ET.fromstring(_read_musicxml(source))
+    parts = root.findall("part")
+    if not parts:
+        raise ValueError("o candidato não contém partes")
+    extracted_number = None
+    for part_index, part in enumerate(parts, 1):
+        measures = part.findall("measure")
+        if not measures:
+            raise ValueError(f"a parte {part_index} não contém compassos")
+        try:
+            selected = measures[measure_index]
+        except IndexError as exc:
+            raise ValueError(
+                f"a parte {part_index} não contém o compasso solicitado"
+            ) from exc
+        if extracted_number is None:
+            extracted_number = selected.get("number")
+        selected_copy = copy.deepcopy(selected)
+        selected_copy.set("number", "1")
+        for measure in measures:
+            part.remove(measure)
+        part.append(selected_copy)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    ET.ElementTree(root).write(output, encoding="utf-8", xml_declaration=True)
+    return {
+        "source": str(source.resolve()),
+        "output": str(output.resolve()),
+        "measure_index": measure_index,
+        "source_measure_number": extracted_number,
+        "parts": len(parts),
     }
 
 
