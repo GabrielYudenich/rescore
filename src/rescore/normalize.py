@@ -8,7 +8,11 @@ from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
-from .choros9 import analyze_reference_calibration, reconstruct_scanned_rhythm
+from .choros9 import (
+    analyze_reference_calibration,
+    apply_choros9_page4_rhythm_profile,
+    reconstruct_scanned_rhythm,
+)
 from .musicxml import _read_musicxml, normalize_part_name, parse_musicxml
 
 
@@ -974,9 +978,17 @@ def build_meter_locked_musicxml(
     """Rebuild an OMR result with every stream clamped and filled to a fixed meter."""
     beats, beat_type, duration = _parse_meter(meter)
     candidate = parse_musicxml(candidate_path)
+    choros_profile = bool(
+        score_profile and score_profile.startswith("choros9")
+    )
+    opening_rhythm_profile = (
+        apply_choros9_page4_rhythm_profile(candidate)
+        if score_profile == "choros9-page-4"
+        else None
+    )
     position_reconstruction = (
         reconstruct_scanned_rhythm(candidate, meter)
-        if score_profile in {"choros9", "choros9-opening"}
+        if choros_profile
         else None
     )
     root = ET.fromstring(_read_musicxml(candidate_path))
@@ -996,7 +1008,7 @@ def build_meter_locked_musicxml(
         if event.get("pitch"):
             target = aliases.get(event["part_id"], event["part_id"])
             cloned = _clone_event(event, target)
-            if score_profile in {"choros9", "choros9-opening"}:
+            if choros_profile:
                 # This orchestral score has no vocal parts. Scan noise and
                 # articulations are frequently exported as lyric syllables.
                 cloned["lyrics"] = []
@@ -1006,7 +1018,7 @@ def build_meter_locked_musicxml(
     )
     simplified_tuplets = 0
     dropped_boundary_events = 0
-    if score_profile in {"choros9", "choros9-opening"}:
+    if choros_profile:
         for part_id, events in list(events_by_part.items()):
             safe_events: list[dict] = []
             for event in events:
@@ -1106,6 +1118,7 @@ def build_meter_locked_musicxml(
         "parts": len(root.findall("part")),
         "measures": candidate["measures"],
         "instrument_profile": profile_name,
+        "opening_rhythm_profile": opening_rhythm_profile,
         "position_reconstruction": position_reconstruction,
         "verified_lyrics": verified_lyrics,
         "grouped_tuplet_notes": grouped_tuplet_notes,

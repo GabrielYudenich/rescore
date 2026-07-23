@@ -140,6 +140,11 @@ As páginas 3-7 herdam 4/4. O relatório `scan-preprocess.json` informa se algum
 anotação externa foi detectada, sua caixa, continuidade e quantidade de pixels
 removidos.
 
+Para páginas densas, `audiveris-families/focus-report.json` registra os recortes
+verticais ampliados a 200% e informa se as leituras de teclas/harpas e cordas foram
+aceitas. A fórmula 4/4 e as claves fixas aparecem somente onde mudam; metadados
+copiados do começo de um recorte não são repetidos na partitura contínua.
+
 O arquivo `continuous/playability-report.json` lista acordes impossíveis encontrados
 em linhas monofônicas, a nota destinada a cada executante e qualquer altura descartada
 por exceder o número de músicos daquela pauta. Esse relatório deve ser conferido

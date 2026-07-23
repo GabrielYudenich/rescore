@@ -18,6 +18,36 @@ CHOROS9_AUDIVERIS_CONSTANTS = {
     "org.audiveris.omr.sheet.grid.BarsRetriever.maxColumnDx": "3.0",
 }
 
+# Vertical proportions measured from several complete Choros 9 pages. The
+# edition keeps this 24-staff order stable even when the gaps between families
+# change slightly. Fractions are relative to the first and last staff centres.
+CHOROS9_STAFF_CENTER_FRACTIONS = (
+    0.0,
+    0.0352,
+    0.0756,
+    0.1126,
+    0.1519,
+    0.1909,
+    0.2286,
+    0.2687,
+    0.3335,
+    0.3734,
+    0.4173,
+    0.4594,
+    0.4980,
+    0.5358,
+    0.5756,
+    0.6218,
+    0.6588,
+    0.7075,
+    0.7486,
+    0.8229,
+    0.8682,
+    0.9118,
+    0.9544,
+    1.0,
+)
+
 
 def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
     """Remove only oversized handwritten wedges crossing several staves.
@@ -485,6 +515,145 @@ def split_orchestral_measure_images(
             raise ValueError(f"não foi possível gravar a imagem: {path}")
         results.append(path)
     return results
+
+
+def create_choros9_family_crops(
+    source: Path,
+    report: dict,
+    output_dir: Path,
+    *,
+    scale: float = 2.0,
+) -> dict:
+    """Create 200% crops for the keyboard/harp and string families.
+
+    A full 24-staff page leaves only about 13 pixels between staff lines at the
+    default scan resolution. These crops reproduce the useful effect of
+    zooming to 200% in a PDF viewer while retaining labels and all three bars.
+    """
+    import cv2
+    import numpy as np
+
+    gray = cv2.imread(str(source), cv2.IMREAD_GRAYSCALE)
+    if gray is None:
+        raise ValueError(f"não foi possível abrir a imagem: {source}")
+    if scale <= 0:
+        raise ValueError("a escala do recorte precisa ser positiva")
+    bars = [int(value) for value in report.get("barline_columns", [])]
+    if len(bars) < 3:
+        raise ValueError("barras insuficientes para localizar as pautas")
+    interline = float(
+        report.get("annotation_filter", {}).get("interline") or 13.0
+    )
+
+    # Detect staff-line groups inside the middle measure, where labels and
+    # opening clefs cannot contaminate the horizontal projection.
+    margin = max(20, int(round(interline * 4)))
+    left = bars[1] + margin
+    right = bars[2] - margin
+    if right - left < 250:
+        left = bars[0] + margin
+        right = bars[-1] - margin
+    foreground = cv2.threshold(
+        gray[:, left:right], 200, 255, cv2.THRESH_BINARY_INV
+    )[1]
+    kernel_width = max(80, int(round((right - left) * 0.2)))
+    horizontal = cv2.morphologyEx(
+        foreground,
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_width, 1)),
+    )
+    weights = (horizontal > 0).sum(axis=1)
+    rows = np.where(weights > max(80, (right - left) * 0.2))[0]
+    runs: list[list[int]] = []
+    for row in rows:
+        if not runs or row > runs[-1][-1] + 1:
+            runs.append([int(row)])
+        else:
+            runs[-1].append(int(row))
+    raw_lines = [sum(run) / len(run) for run in runs]
+    merged_lines: list[list[float]] = []
+    for line in raw_lines:
+        if merged_lines and line - merged_lines[-1][-1] < interline * 0.45:
+            merged_lines[-1].append(line)
+        else:
+            merged_lines.append([line])
+    lines = [sum(group) / len(group) for group in merged_lines]
+
+    candidates: list[tuple[float, float]] = []
+    for index in range(max(0, len(lines) - 4)):
+        sequence = lines[index : index + 5]
+        gaps = np.diff(sequence)
+        if all(interline * 0.65 <= gap <= interline * 1.4 for gap in gaps):
+            candidates.append(
+                (
+                    sum(sequence) / 5,
+                    float(sum(abs(gap - interline) for gap in gaps)),
+                )
+            )
+    centres: list[tuple[float, float]] = []
+    for centre, error in sorted(candidates):
+        if centres and centre - centres[-1][0] < interline * 5:
+            if error < centres[-1][1]:
+                centres[-1] = (centre, error)
+        else:
+            centres.append((centre, error))
+    if len(centres) < 20:
+        raise ValueError(
+            f"somente {len(centres)} pautas foram localizadas para o recorte"
+        )
+    first_centre = centres[0][0]
+    last_centre = centres[-1][0]
+    if last_centre - first_centre < interline * 100:
+        raise ValueError("altura útil da grade orquestral não foi confirmada")
+    staff_centres = [
+        first_centre + fraction * (last_centre - first_centre)
+        for fraction in CHOROS9_STAFF_CENTER_FRACTIONS
+    ]
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    families = {
+        "keys-harp": (15, 18),
+        "strings": (19, 23),
+    }
+    outputs = {}
+    padding = interline * 6
+    for name, (first_staff, last_staff) in families.items():
+        top = max(0, int(round(staff_centres[first_staff] - padding)))
+        bottom = min(
+            gray.shape[0],
+            int(round(staff_centres[last_staff] + padding)),
+        )
+        crop = gray[top:bottom, :]
+        enlarged = cv2.resize(
+            crop,
+            None,
+            fx=scale,
+            fy=scale,
+            interpolation=cv2.INTER_CUBIC,
+        )
+        destination = output_dir / f"{name}-200.png"
+        if not cv2.imwrite(str(destination), enlarged):
+            raise ValueError(f"não foi possível gravar o recorte: {destination}")
+        outputs[name] = {
+            "path": str(destination.resolve()),
+            "bbox": {
+                "left": 0,
+                "top": top,
+                "right": gray.shape[1],
+                "bottom": bottom,
+            },
+            "expected_staves": last_staff - first_staff + 1,
+            "first_staff": first_staff + 1,
+            "last_staff": last_staff + 1,
+            "scale": scale,
+        }
+    return {
+        "source": str(source.resolve()),
+        "interline": interline,
+        "detected_staff_groups": len(centres),
+        "estimated_staff_centres": [round(value, 2) for value in staff_centres],
+        "families": outputs,
+    }
 
 
 def rescale_scan_image(source: Path, output: Path, factor: float) -> Path:

@@ -49,12 +49,19 @@ Uma página escaneada passa por tentativas adicionais:
 3. OMR da página completa;
 4. se necessário, isolamento dos compassos detectados;
 5. nova tentativa ampliada por compasso;
-6. reunião dos candidatos em um único MusicXML;
-7. reconstrução posicional de linhas densas cuja soma de durações excede o compasso.
+6. releitura vertical ampliada das famílias mais densas;
+7. reunião dos candidatos em um único MusicXML;
+8. reconstrução posicional de linhas densas cuja soma de durações excede o compasso.
 
 O recorte por compasso reduz a quantidade de linhas concorrentes que o reconhecedor
 precisa interpretar. Ele não inventa a posição de uma barra: uma separação só é
 usada quando a estrutura visual oferece evidência suficiente.
+
+No perfil do Choros 9, a geometria das 24 pautas localizadas permite criar dois
+recortes adicionais a 200%: teclas/harpas e cordas. Esses recortes conservam todos
+os compassos da página e reduzem a concorrência vertical. Só substituem a família
+correspondente quando o OMR devolve exatamente a quantidade esperada de pautas e
+compassos; caso contrário, o candidato anterior é preservado.
 
 Depois do OMR integral, a quantidade de compassos é comparada ao número de
 intervalos entre barras confirmadas. Um resultado curto é rejeitado e ativa o

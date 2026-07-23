@@ -136,6 +136,10 @@ confinados a uma pauta são preservados.
 O número de compassos reconhecidos também é comparado às barras confirmadas na
 imagem. Uma página curta é relida por compasso; pautas omitidas em um recorte
 são preenchidas na posição correta, sem deslocar as famílias instrumentais.
+Nas páginas densas do Choros 9, teclas/harpas e cordas também são relidas em
+recortes verticais ampliados a 200%. Assim cada pauta recebe resolução semelhante
+à visualização aproximada no leitor de PDF, sem perder a continuidade horizontal
+dos compassos. O diagnóstico fica em `audiveris-families/focus-report.json`.
 
 Quando uma referência manual é fornecida para a abertura do Choros 9, somente os
 três primeiros compassos são considerados verificados. Um quarto compasso

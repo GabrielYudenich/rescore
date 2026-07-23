@@ -29,6 +29,7 @@ from .choros9 import (
     build_choros9_continuous_musicxml,
     extract_measure_candidate,
     merge_measure_candidates,
+    replace_choros9_family_parts,
 )
 from .normalize import (
     MOVEMENT1_METER_CHANGES,
@@ -44,6 +45,7 @@ from .pages import parse_page_spec
 from .pdf import images_to_tiff, pdf_info, render_pages
 from .scan import (
     CHOROS9_AUDIVERIS_CONSTANTS,
+    create_choros9_family_crops,
     reinforce_orchestral_barlines,
     rescale_scan_image,
     split_orchestral_measure_images,
@@ -126,8 +128,22 @@ def _run_scan_aware_audiveris(
 ) -> list[Path]:
     """Run a full sheet first, then isolate real measures if a dense scan fails."""
     cached_fallback = output_dir.parent / "audiveris-measures" / "merged.musicxml"
+    focused_cache = (
+        output_dir.parent / "audiveris-families" / "focused-merged.musicxml"
+    )
+    if scan_profile and focused_cache.is_file() and not force:
+        return [focused_cache]
     if scan_profile and cached_fallback.is_file() and not force:
-        return [cached_fallback]
+        return [
+            _enhance_choros9_with_family_crops(
+                audiveris,
+                cached_fallback,
+                rendered[0],
+                scan_reports[0],
+                output_dir.parent,
+                force=force,
+            )
+        ]
     primary_error: Exception | None = None
     short_primary: Path | None = None
     try:
@@ -164,6 +180,27 @@ def _run_scan_aware_audiveris(
     if candidates or not scan_profile or len(rendered) != 1 or not scan_reports:
         if primary_error and not candidates:
             raise primary_error
+        if (
+            candidates
+            and scan_profile
+            and len(rendered) == 1
+            and scan_reports
+        ):
+            base = max(candidates, key=lambda item: item.stat().st_mtime)
+            try:
+                if parse_musicxml(base)["parts_count"] == 24:
+                    return [
+                        _enhance_choros9_with_family_crops(
+                            audiveris,
+                            base,
+                            rendered[0],
+                            scan_reports[0],
+                            output_dir.parent,
+                            force=force,
+                        )
+                    ]
+            except (ValueError, RuntimeError):
+                pass
         return candidates
 
     fallback_root = output_dir.parent / "audiveris-measures"
@@ -244,7 +281,109 @@ def _run_scan_aware_audiveris(
         ),
         encoding="utf-8",
     )
-    return [merged]
+    return [
+        _enhance_choros9_with_family_crops(
+            audiveris,
+            merged,
+            rendered[0],
+            scan_reports[0],
+            output_dir.parent,
+            force=force,
+        )
+    ]
+
+
+def _enhance_choros9_with_family_crops(
+    audiveris: Path,
+    base_candidate: Path,
+    rendered: Path,
+    scan_report: dict,
+    page_output: Path,
+    *,
+    force: bool,
+) -> Path:
+    """Replace dense lower families with focused 200% recognition."""
+    # The first three measures are copied literally from the manual reference,
+    # so focused OCR on PDF page 3 would only add runtime and uncertainty.
+    if rendered.stem.endswith("0003"):
+        return base_candidate
+    focused_root = page_output / "audiveris-families"
+    merged = focused_root / "focused-merged.musicxml"
+    if merged.is_file() and not force:
+        return merged
+    crop_report = create_choros9_family_crops(
+        rendered,
+        scan_report,
+        focused_root / "images",
+        scale=2.0,
+    )
+    specifications = {
+        "keys-harp": {"first_staff": 16, "expected_parts": 4},
+        "strings": {"first_staff": 20, "expected_parts": 5},
+    }
+    replacements: dict[int, Path] = {}
+    attempts = []
+    for name, specification in specifications.items():
+        image = Path(crop_report["families"][name]["path"])
+        try:
+            results = run_audiveris(
+                audiveris,
+                image,
+                [1],
+                focused_root / name,
+                focused_root / f"{name}.log",
+                force=force,
+                constants=CHOROS9_AUDIVERIS_CONSTANTS,
+            )
+            candidate = max(results, key=lambda item: item.stat().st_mtime)
+            score = parse_musicxml(candidate)
+            accepted = (
+                score["parts_count"] == specification["expected_parts"]
+                and score["measures"] == parse_musicxml(base_candidate)["measures"]
+            )
+            error = None if accepted else (
+                f"{score['parts_count']} partes/{score['measures']} compassos; "
+                f"esperado {specification['expected_parts']}/"
+                f"{parse_musicxml(base_candidate)['measures']}"
+            )
+        except (RuntimeError, ValueError) as exc:
+            candidate = None
+            accepted = False
+            error = str(exc)
+        attempts.append(
+            {
+                "family": name,
+                "image": str(image.resolve()),
+                "candidate": str(candidate.resolve()) if candidate else None,
+                "accepted": accepted,
+                "error": error,
+            }
+        )
+        if accepted and candidate is not None:
+            replacements[specification["first_staff"]] = candidate
+    if replacements:
+        merge_report = replace_choros9_family_parts(
+            base_candidate, replacements, merged
+        )
+        result = merged
+    else:
+        merge_report = None
+        result = base_candidate
+    focused_root.mkdir(parents=True, exist_ok=True)
+    (focused_root / "focus-report.json").write_text(
+        json.dumps(
+            {
+                "crop": crop_report,
+                "attempts": attempts,
+                "merge": merge_report,
+                "result": str(result.resolve()),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return result
 
 
 def _render_omr_pages(
@@ -584,7 +723,11 @@ def convert(
             score_profile=(
                 "choros9-opening"
                 if scan_profile and pages == [3]
-                else "choros9" if scan_profile else None
+                else (
+                    f"choros9-page-{pages[0]}"
+                    if scan_profile and len(pages) == 1
+                    else "choros9" if scan_profile else None
+                )
             ),
         )
         meter_validation_path = output_dir / "meter-validation.json"

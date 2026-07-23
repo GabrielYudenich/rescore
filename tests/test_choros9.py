@@ -9,6 +9,7 @@ import numpy as np
 
 from rescore.choros9 import (
     analyze_doublings,
+    apply_choros9_page4_rhythm_profile,
     audit_measure_structure,
     build_choros9_continuous_musicxml,
     extract_measure_candidate,
@@ -175,6 +176,87 @@ class Choros9Tests(unittest.TestCase):
             ["C"],
         )
         self.assertEqual(report["ambiguous_chord_groups"][0]["available_players"], 2)
+        continuation_measure = score.find(
+            "./part[@id='P4']/measure[@number='4']"
+        )
+        self.assertIsNone(continuation_measure.find("./attributes/time"))
+        self.assertIsNone(continuation_measure.find("./attributes/clef"))
+
+    def test_restores_page4_triplets_strings_and_sustained_basses(self):
+        events = []
+        for part_id in ("P16", "P17", "P18", "P19"):
+            for measure in range(1, 4):
+                for index, position in enumerate((100.0, 500.0)):
+                    events.append(
+                        {
+                            "part_id": part_id,
+                            "measure_index": measure,
+                            "measure_number": str(measure),
+                            "onset": str(index * 2),
+                            "duration": "2",
+                            "pitch": "C4",
+                            "voice": "1",
+                            "staff": "1",
+                            "chord": False,
+                            "grace": False,
+                            "tuplet": None,
+                            "default_x": position,
+                        }
+                    )
+        for index in range(16):
+            events.append(
+                {
+                    "part_id": "P20",
+                    "measure_index": 1,
+                    "measure_number": "1",
+                    "onset": str(index),
+                    "duration": "1/6",
+                    "pitch": "D5",
+                    "voice": "1",
+                    "staff": "1",
+                    "chord": False,
+                    "grace": False,
+                    "tuplet": {"actual": "3", "normal": "2"},
+                    "default_x": 100.0 + index * 30,
+                }
+            )
+        for part_id in ("P23", "P24"):
+            events.append(
+                {
+                    "part_id": part_id,
+                    "measure_index": 2,
+                    "measure_number": "2",
+                    "onset": "0",
+                    "duration": "1",
+                    "pitch": "C3",
+                    "voice": "1",
+                    "staff": "1",
+                    "chord": False,
+                    "grace": False,
+                    "tuplet": None,
+                    "ties": [],
+                    "default_x": 100.0,
+                }
+            )
+        score = {"events": events, "events_count": len(events), "measures": 3}
+        report = apply_choros9_page4_rhythm_profile(score)
+        celesta = [
+            event
+            for event in score["events"]
+            if event["part_id"] == "P16" and event["measure_index"] == 1
+        ]
+        violin = [
+            event for event in score["events"] if event["part_id"] == "P20"
+        ]
+        cello = [
+            event for event in score["events"] if event["part_id"] == "P23"
+        ]
+        self.assertEqual(len({event["onset"] for event in celesta}), 6)
+        self.assertTrue(all(event["tuplet"] for event in celesta))
+        self.assertTrue(all(event["tuplet"] is None for event in violin))
+        self.assertEqual([event["pitch"] for event in cello], ["Bb2"] * 3)
+        self.assertEqual(cello[1]["ties"], ["start", "stop"])
+        self.assertEqual(report["sustained_low_string_events"], 6)
 
     def test_reconstructs_dense_scan_from_horizontal_positions(self):
         events = []

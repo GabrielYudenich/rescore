@@ -812,6 +812,82 @@ def merge_measure_candidates(sources: list[Path], output: Path) -> dict:
     }
 
 
+def replace_choros9_family_parts(
+    base: Path,
+    replacements: dict[int, Path],
+    output: Path,
+) -> dict:
+    """Replace staff ranges with focused 200% OMR candidates.
+
+    ``replacements`` maps the first one-based staff in the 24-staff condensed
+    score to a focused MusicXML file. Part identities remain those of ``base``.
+    """
+    root = ET.fromstring(_read_musicxml(base))
+    base_parts = root.findall("part")
+    if len(base_parts) != 24:
+        raise ValueError(
+            f"a base focada precisa ter 24 pautas; encontradas {len(base_parts)}"
+        )
+    measure_count = len(base_parts[0].findall("measure"))
+    applied = []
+    for first_staff, source in sorted(replacements.items()):
+        replacement_root = ET.fromstring(_read_musicxml(source))
+        replacement_parts = replacement_root.findall("part")
+        if not replacement_parts:
+            raise ValueError(f"o recorte não contém pautas: {source}")
+        if first_staff < 1 or first_staff + len(replacement_parts) - 1 > 24:
+            raise ValueError(f"intervalo de pautas inválido para {source}")
+        replacement_counts = {
+            len(part.findall("measure")) for part in replacement_parts
+        }
+        if replacement_counts != {measure_count}:
+            raise ValueError(
+                f"{source} possui {sorted(replacement_counts)} compassos por pauta; "
+                f"esperado: {measure_count}"
+            )
+        for offset, replacement_part in enumerate(replacement_parts):
+            target = base_parts[first_staff - 1 + offset]
+            for old_measure in list(target.findall("measure")):
+                target.remove(old_measure)
+            for measure_index, replacement_measure in enumerate(
+                replacement_part.findall("measure"), 1
+            ):
+                measure = copy.deepcopy(replacement_measure)
+                measure.set("number", str(measure_index))
+                # False tuplets in the dense string crop would prevent the
+                # position-based sixteenth reconstruction from running.
+                if first_staff == 20:
+                    for note in measure.iter("note"):
+                        time_modification = note.find("time-modification")
+                        if time_modification is not None:
+                            note.remove(time_modification)
+                        notations = note.find("notations")
+                        if notations is not None:
+                            for tuplet in list(notations.findall("tuplet")):
+                                notations.remove(tuplet)
+                            if not list(notations):
+                                note.remove(notations)
+                target.append(measure)
+        applied.append(
+            {
+                "source": str(source.resolve()),
+                "first_staff": first_staff,
+                "last_staff": first_staff + len(replacement_parts) - 1,
+                "parts": len(replacement_parts),
+                "measures": measure_count,
+            }
+        )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    ET.ElementTree(root).write(output, encoding="utf-8", xml_declaration=True)
+    return {
+        "base": str(base.resolve()),
+        "output": str(output.resolve()),
+        "parts": 24,
+        "measures": measure_count,
+        "replacements": applied,
+    }
+
+
 def extract_measure_candidate(
     source: Path, output: Path, measure_index: int
 ) -> dict:
@@ -849,6 +925,150 @@ def extract_measure_candidate(
     }
 
 
+def apply_choros9_page4_rhythm_profile(score: dict) -> dict:
+    """Restore the opening ostinati confirmed in the enlarged page-4 crop."""
+    string_tuplets_removed = 0
+    for event in score["events"]:
+        if event["part_id"] in {"P20", "P21", "P22"} and event.get("tuplet"):
+            event["tuplet"] = None
+            event.pop("tuplet_group", None)
+            string_tuplets_removed += 1
+
+    triplet_parts = {"P16", "P17", "P18", "P19"}
+    original = list(score["events"])
+    retained = [
+        event for event in original if event["part_id"] not in triplet_parts
+    ]
+    restored: list[dict] = []
+    synthetic_events = 0
+    profiled_measures = 0
+    for part_id in sorted(triplet_parts):
+        for measure_index in range(1, int(score["measures"]) + 1):
+            events = [
+                event
+                for event in original
+                if event["part_id"] == part_id
+                and int(event["measure_index"]) == measure_index
+                and event.get("pitch")
+                and event.get("default_x") is not None
+            ]
+            if not events:
+                continue
+            groups = _position_groups(events)
+            # The enlarged crop may offset chord members by several pixels.
+            # Merge groups again with a wider, still conservative threshold.
+            merged: list[list[dict]] = []
+            for group in groups:
+                position = statistics.median(
+                    float(event["default_x"]) for event in group
+                )
+                if merged:
+                    previous = statistics.median(
+                        float(event["default_x"]) for event in merged[-1]
+                    )
+                    if position - previous <= 20:
+                        merged[-1].extend(group)
+                        continue
+                merged.append(group)
+            if len(merged) < 2 or len(merged) > 8:
+                retained.extend(events)
+                continue
+            positions = [
+                statistics.median(float(event["default_x"]) for event in group)
+                for group in merged
+            ]
+            if positions[-1] == positions[0]:
+                retained.extend(events)
+                continue
+            target_positions = [
+                positions[0]
+                + (positions[-1] - positions[0]) * index / 5
+                for index in range(6)
+            ]
+            onsets = (
+                Fraction(0),
+                Fraction(2, 3),
+                Fraction(4, 3),
+                Fraction(2),
+                Fraction(8, 3),
+                Fraction(10, 3),
+            )
+            for slot, (target_x, onset) in enumerate(
+                zip(target_positions, onsets)
+            ):
+                source_index = min(
+                    range(len(positions)),
+                    key=lambda index: abs(positions[index] - target_x),
+                )
+                source_group = merged[source_index]
+                for note_index, source_event in enumerate(source_group):
+                    event = copy.deepcopy(source_event)
+                    event["onset"] = _fraction_text(onset)
+                    event["duration"] = "2/3"
+                    event["default_x"] = target_x
+                    event["tuplet"] = {"actual": "3", "normal": "2"}
+                    event["tuplet_group"] = (
+                        f"{part_id}-{measure_index}-quarter-triplet-{slot // 3}"
+                    )
+                    event["chord"] = note_index > 0
+                    restored.append(event)
+                    if source_index != slot:
+                        synthetic_events += 1
+            profiled_measures += 1
+    retained.extend(restored)
+    sustained_parts = {"P23", "P24"}
+    sustained_templates = {
+        part_id: next(
+            (
+                event
+                for event in original
+                if event["part_id"] == part_id and event.get("pitch")
+            ),
+            None,
+        )
+        for part_id in sustained_parts
+    }
+    retained = [
+        event for event in retained if event["part_id"] not in sustained_parts
+    ]
+    sustained_events = 0
+    for part_id, template in sustained_templates.items():
+        if template is None:
+            continue
+        for measure_index in range(1, int(score["measures"]) + 1):
+            event = copy.deepcopy(template)
+            event["measure_index"] = measure_index
+            event["measure_number"] = str(measure_index)
+            event["onset"] = "0"
+            event["duration"] = "4"
+            event["pitch"] = "Bb2"
+            event["voice"] = "1"
+            event["staff"] = "1"
+            event["chord"] = False
+            event["tuplet"] = None
+            event.pop("tuplet_group", None)
+            event["ties"] = (
+                ["start"]
+                if measure_index == 1
+                else ["start", "stop"]
+                if measure_index < int(score["measures"])
+                else ["stop"]
+            )
+            retained.append(event)
+            sustained_events += 1
+    score["events"] = retained
+    score["events_count"] = len(retained)
+    return {
+        "profile": "choros9-page-4",
+        "string_tuplets_removed": string_tuplets_removed,
+        "triplet_measures_profiled": profiled_measures,
+        "synthetic_triplet_events": synthetic_events,
+        "triplet_rule": "3 semínimas no tempo de 2; dois grupos por compasso 4/4",
+        "sustained_low_string_events": sustained_events,
+        "sustained_low_string_pitch": "Bb2",
+    }
+
+
 def _pitch_rank(note: ET.Element) -> int:
     pitch = note.find("pitch")
     if pitch is None:
@@ -872,6 +1092,54 @@ def _pitch_label(note: ET.Element) -> str | None:
 def _remove_print_nodes(measure: ET.Element) -> None:
     for print_node in list(measure.findall("print")):
         measure.remove(print_node)
+
+
+def _clean_continuation_metadata(
+    measure: ET.Element,
+    target_part: str,
+) -> None:
+    """Drop fragment-start meters and impossible clefs from appended bars."""
+    fixed_clef_parts = {
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8",
+        "P9",
+        "P10",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P25",
+        "P26",
+        "P31",
+        "P32",
+        "P33",
+        "P34",
+        "P35",
+    }
+    musical_content_seen = False
+    for child in list(measure):
+        if child.tag in {"note", "backup", "forward"}:
+            musical_content_seen = True
+            continue
+        if child.tag != "attributes":
+            continue
+        for time in list(child.findall("time")):
+            child.remove(time)
+        if not musical_content_seen or target_part in fixed_clef_parts:
+            for clef in list(child.findall("clef")):
+                child.remove(clef)
 
 
 def _split_melodic_measure(
@@ -1047,6 +1315,10 @@ def build_choros9_continuous_musicxml(
         for index, measure in enumerate(part.findall("measure"), 1):
             measure.set("number", str(index))
             _remove_print_nodes(measure)
+            if index > 1:
+                for attributes in measure.findall("attributes"):
+                    for time in list(attributes.findall("time")):
+                        attributes.remove(time)
 
     target_mapping: dict[str, tuple[str, str | None, int, int]] = {}
     for source_id, targets in CHOROS9_OPENING_REFERENCE_MAP.items():
@@ -1157,6 +1429,7 @@ def build_choros9_continuous_musicxml(
                 if target_id == "P1" and local_measure == 0:
                     page_break = ET.Element("print", {"new-page": "yes"})
                     measure.insert(0, page_break)
+                _clean_continuation_metadata(measure, target_id)
                 target_part.append(measure)
             report["continuation_measures"] += 1
 
