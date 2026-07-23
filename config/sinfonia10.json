@@ -1,0 +1,33 @@
+{
+  "work": "Heitor Villa-Lobos - Sinfonia nº 10 - Sumé, Pater, Patrium",
+  "reference_case": {
+    "pdf_page": 67,
+    "printed_page": 61,
+    "movement": "III. Scherzo",
+    "measures": 8,
+    "reference_mscz": "III. Scherzo.mscz",
+    "reference_musicxml": "III. Scherzo (descompactado).musicxml"
+  },
+  "policies": {
+    "woodwinds_are_monophonic_players": true,
+    "split_simultaneous_wind_notes": true,
+    "preserve_empty_target_parts": true,
+    "harp_1_and_harp_2_are_distinct_parts": true,
+    "preserve_written_transpositions": true,
+    "initial_local_meter": {
+      "global": "9/8",
+      "local": "3/4",
+      "measures": [1, 2, 3],
+      "returns_to_global_at_measure": 4
+    }
+  },
+  "target_parts": [
+    "Piccolo 1", "Piccolo 2", "Flute 1", "Flute 2", "Oboe 1", "Oboe 2",
+    "Clarinet in B♭ 1", "Clarinet in B♭ 2", "Bassoon 1", "Bassoon 2",
+    "Horn in F 1 & 3", "Horn in F 2 & 4", "Trumpet in B♭ 1",
+    "Trumpet in B♭ 2", "Trombone 1", "Trombone 2", "Tuba", "Timpani",
+    "Snare Drum", "Bass Drum", "Cymbals", "Celesta", "Piano", "Harpa 1",
+    "Harpa 2", "Violins 1", "Violins 2", "Violas", "Violoncellos",
+    "Contrabasses"
+  ]
+}

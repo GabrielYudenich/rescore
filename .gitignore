@@ -209,6 +209,32 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# ReScore local tools and generated artifacts
+/backup/
+/output/
+/tmp/
+/tools/
+*.omr
+
+# Private source material and editable/generated scores
+*.pdf
+*.mscz
+*.mscx
+*.mxl
+*.musicxml
+*.mid
+*.midi
+
+# Local score references and project notes
+/*.png
+/*.jpg
+/*.jpeg
+/*.tif
+/*.tiff
+/.mscbackup/
+/.agents/
+/PROJECT_CONTEXT.md
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

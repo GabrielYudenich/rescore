@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rescore"
+version = "0.1.0"
+description = "Pipeline local de OMR para converter partituras PDF em MusicXML e MuseScore."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "PyMuPDF>=1.24,<2",
+  "Pillow>=10,<12",
+  "opencv-python-headless>=4.10,<5",
+]
+
+[project.scripts]
+rescore = "rescore.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
