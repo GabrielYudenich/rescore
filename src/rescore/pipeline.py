@@ -11,6 +11,7 @@ from .mscz import (
     normalize_fixed_meter_padding,
     normalize_mscz_voice_durations,
     normalize_meter_map_padding,
+    remove_leading_empty_vboxes,
     replace_score_style,
     set_automatic_beaming,
     sha256,
@@ -27,6 +28,7 @@ from .choros9 import (
 from .normalize import (
     MOVEMENT1_METER_CHANGES,
     SCHERZO_METER_CHANGES,
+    build_choros9_reference_musicxml,
     build_meter_locked_musicxml,
     build_movement1_block_7_12,
     build_movement1_complete,
@@ -375,22 +377,33 @@ def convert(
     choros_doublings_path = None
     choros_measure_audit_path = None
     if reference:
-        if reference_mscz is None:
+        if reference_mscz is None and not scan_profile:
             inferred_reference = project_root / "III. Scherzo.mscz"
             reference_mscz = inferred_reference if inferred_reference.is_file() else None
         style_path = (
             extract_score_style(reference_mscz, output_dir / "reference-style.mss")
-            if reference_mscz
+            if reference_mscz and not scan_profile
             else None
         )
         reference_score = parse_musicxml(reference)
-        comparison = compare_scores(reference_score, candidate_score)
+        normalized_xml_path = output_dir / "normalized.musicxml"
+        if scan_profile and pages == [3]:
+            normalization_summary = build_choros9_reference_musicxml(
+                candidate,
+                reference,
+                normalized_xml_path,
+                verified_measures=3,
+            )
+            comparison = normalization_summary["reference_calibration"]
+        else:
+            normalization_summary = build_normalized_musicxml(
+                candidate, reference, normalized_xml_path
+            )
+            comparison = compare_scores(reference_score, candidate_score)
         comparison_path = output_dir / "comparison.json"
         comparison_path.write_text(
             json.dumps(comparison, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        normalized_xml_path = output_dir / "normalized.musicxml"
-        normalization_summary = build_normalized_musicxml(candidate, reference, normalized_xml_path)
         meter_validation_path = output_dir / "meter-validation.json"
         meter_validation_path.write_text(
             json.dumps(normalization_summary["meter_validation"], ensure_ascii=False, indent=2),
@@ -406,7 +419,25 @@ def convert(
         )
         if style_path:
             replace_score_style(normalized_mscz_path, style_path)
-        if reference_mscz:
+        if scan_profile and pages == [3]:
+            removed_cover_frames = remove_leading_empty_vboxes(normalized_mscz_path)
+            musescore_validation = validate_fixed_meter_mscz(
+                normalized_mscz_path, 4, 4
+            )
+            musescore_validation["verified_reference_measures"] = 3
+            musescore_validation["ignored_reference_measure"] = 4
+            musescore_validation["removed_empty_cover_frames"] = removed_cover_frames
+            if not musescore_validation["valid"]:
+                raise ValueError(
+                    "validação do MuseScore falhou: "
+                    f"{musescore_validation['violations'][:3]}"
+                )
+            musescore_validation_path = output_dir / "musescore-validation.json"
+            musescore_validation_path.write_text(
+                json.dumps(musescore_validation, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        elif reference_mscz:
             graft_reference_measures(reference_mscz, normalized_mscz_path, measure_count=8)
             automatic_beaming = set_automatic_beaming(normalized_mscz_path, start_measure=9)
             musescore_validation = validate_scherzo_mscz(

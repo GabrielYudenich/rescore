@@ -47,6 +47,14 @@ def _parser() -> argparse.ArgumentParser:
         default="auto",
         help="perfil da partitura; 'auto' reconhece pelo nome do PDF",
     )
+    parser.add_argument(
+        "--reference-mscz",
+        type=Path,
+        help=(
+            "referência manual do MuseScore; no perfil choros9 somente os "
+            "três primeiros compassos são considerados"
+        ),
+    )
     parser.add_argument("--force", action="store_true", help="refaz o OMR já armazenado")
     return parser
 
@@ -66,6 +74,8 @@ def _convert_choros9_pages(
     dpi: int,
     force: bool,
     meter: str | None,
+    reference_musicxml: Path | None = None,
+    reference_mscz: Path | None = None,
 ) -> dict:
     """Process scanned pages independently so one difficult page cannot abort a batch."""
     output.mkdir(parents=True, exist_ok=True)
@@ -83,6 +93,8 @@ def _convert_choros9_pages(
                 pdf,
                 str(page),
                 page_output,
+                reference=reference_musicxml if page == 3 else None,
+                reference_mscz=reference_mscz if page == 3 else None,
                 force=force,
                 omr_dpi=dpi,
                 meter=page_meter,
@@ -244,6 +256,37 @@ def main(argv: list[str] | None = None) -> int:
             output = (
                 args.output or PROJECT_ROOT / "output" / f"choros9-pages-{page_spec}"
             ).resolve()
+            reference_mscz = args.reference_mscz
+            if reference_mscz is None:
+                automatic_reference = PROJECT_ROOT / "Choros 9.mscz"
+                reference_mscz = (
+                    automatic_reference if automatic_reference.is_file() else None
+                )
+            reference_musicxml = None
+            if reference_mscz is not None and 3 in pages:
+                reference_mscz = reference_mscz.resolve()
+                if not reference_mscz.is_file():
+                    raise FileNotFoundError(
+                        f"referência MuseScore não encontrada: {reference_mscz}"
+                    )
+                reference_folder = output / "reference"
+                reference_folder.mkdir(parents=True, exist_ok=True)
+                reference_musicxml = reference_folder / "choros9-reference.musicxml"
+                musescore = find_musescore(PROJECT_ROOT)
+                if musescore is None:
+                    raise FileNotFoundError(
+                        "MuseScore não encontrado; execute `rescore doctor`"
+                    )
+                convert_with_musescore(
+                    musescore,
+                    reference_mscz,
+                    reference_musicxml,
+                    reference_folder / "export.log",
+                )
+                print(
+                    "Referência manual: usando somente os compassos 1–3; "
+                    "o compasso 4 será ignorado."
+                )
             manifest = _convert_choros9_pages(
                 pdf,
                 pages,
@@ -251,6 +294,8 @@ def main(argv: list[str] | None = None) -> int:
                 dpi=dpi,
                 force=args.force,
                 meter=args.meter,
+                reference_musicxml=reference_musicxml,
+                reference_mscz=reference_mscz,
             )
         elif pages == list(range(7, 42)):
             base_output = PROJECT_ROOT / "output" / "movement1-pages-7-13"

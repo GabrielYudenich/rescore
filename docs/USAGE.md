@@ -107,6 +107,19 @@ python run.py `
   --dpi 300
 ```
 
+Com uma abertura transcrita manualmente:
+
+```powershell
+python run.py `
+  --profile choros9 `
+  --pdf "grade-escaneada.pdf" `
+  --pages 3 `
+  --reference-mscz "referencia-manual.mscz"
+```
+
+O perfil atual considera verificados apenas os três primeiros compassos dessa
+referência e ignora qualquer quarto compasso inacabado.
+
 As páginas são isoladas e cada falha aparece no manifesto do lote. Esse modo é mais
 resiliente, porém scans manuscritos ou muito degradados exigem consideravelmente mais
 revisão que uma edição digital.

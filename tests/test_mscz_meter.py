@@ -4,10 +4,33 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-from rescore.mscz import normalize_mscz_voice_durations, validate_meter_map_mscz
+from rescore.mscz import (
+    normalize_mscz_voice_durations,
+    remove_leading_empty_vboxes,
+    validate_meter_map_mscz,
+)
 
 
 class MuseScoreMeterTests(unittest.TestCase):
+    def test_removes_empty_cover_frame_before_first_measure(self):
+        measure = ET.Element("Measure")
+        with tempfile.TemporaryDirectory() as folder:
+            path = self._write_score(measure, folder)
+            with zipfile.ZipFile(path) as archive:
+                root = ET.fromstring(archive.read("score.mscx"))
+            staff = root.find("./Score/Staff")
+            vbox = ET.Element("VBox")
+            ET.SubElement(vbox, "height").text = "10"
+            ET.SubElement(vbox, "eid").text = "placeholder"
+            staff.insert(0, vbox)
+            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("score.mscx", ET.tostring(root, encoding="utf-8"))
+            removed = remove_leading_empty_vboxes(path)
+            with zipfile.ZipFile(path) as archive:
+                cleaned = ET.fromstring(archive.read("score.mscx"))
+        self.assertEqual(removed, 1)
+        self.assertIsNone(cleaned.find("./Score/Staff/VBox"))
+
     def _write_score(self, measure: ET.Element, folder: str) -> Path:
         root = ET.Element("museScore")
         score = ET.SubElement(root, "Score")

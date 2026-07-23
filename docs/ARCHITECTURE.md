@@ -85,6 +85,21 @@ Duplicações entre famílias orquestrais são tratadas como uma pista de consis
 Uma semelhança rítmica ou melódica isolada não autoriza copiar automaticamente o
 conteúdo de uma pauta para outra.
 
+### Calibração por referência manual
+
+Uma pequena transcrição revisada pode definir a estrutura instrumental sem se
+tornar uma regra fixa de notas. Na abertura escaneada do Choros 9, a referência:
+
+- expande 24 pautas visuais para 35 partes e 37 pautas reais;
+- identifica uníssonos confirmados entre executantes;
+- registra quais partes usam quiálteras;
+- mede separadamente coincidência rítmica e coincidência de altura;
+- preserva somente os compassos explicitamente marcados como verificados.
+
+Compassos incompletos posteriores da referência são removidos da cópia de trabalho
+e listados no relatório. Para páginas novas, a referência fornece a estrutura da
+orquestra, mas não autoriza copiar material musical antigo.
+
 ## Artefatos e retomada
 
 Cada etapa grava seus próprios artefatos e logs. Uma execução posterior reutiliza o

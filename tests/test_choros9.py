@@ -13,6 +13,7 @@ from rescore.choros9 import (
     reconstruct_scanned_rhythm,
 )
 from rescore.musicxml import parse_musicxml
+from rescore.normalize import build_choros9_reference_musicxml
 from rescore.scan import reinforce_orchestral_barlines
 
 
@@ -32,7 +33,48 @@ def _score(pitch: str) -> str:
 </score-partwise>"""
 
 
+def _four_measure_reference() -> str:
+    measures = []
+    for number in range(1, 5):
+        attributes = (
+            "<attributes><divisions>1</divisions><time><beats>4</beats>"
+            "<beat-type>4</beat-type></time></attributes>"
+            if number == 1
+            else ""
+        )
+        note = (
+            "<note><pitch><step>D</step><octave>5</octave></pitch>"
+            "<duration>4</duration><voice>1</voice><type>whole</type></note>"
+            if number == 4
+            else "<note><rest/><duration>4</duration><voice>1</voice><type>whole</type></note>"
+        )
+        measures.append(f'<measure number="{number}">{attributes}{note}</measure>')
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<score-partwise version="4.0"><part-list>'
+        '<score-part id="P1"><part-name>Piccolo</part-name></score-part>'
+        f'</part-list><part id="P1">{"".join(measures)}</part></score-partwise>'
+    )
+
+
 class Choros9Tests(unittest.TestCase):
+    def test_reference_builder_ignores_unfinished_fourth_measure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidate = root / "candidate.musicxml"
+            reference = root / "reference.musicxml"
+            output = root / "calibrated.musicxml"
+            candidate.write_text(_four_measure_reference(), encoding="utf-8")
+            reference.write_text(_four_measure_reference(), encoding="utf-8")
+            summary = build_choros9_reference_musicxml(
+                candidate, reference, output, verified_measures=3
+            )
+            score = parse_musicxml(output, include_rests=True)
+        self.assertEqual(summary["verified_reference_measures"], 3)
+        self.assertEqual(summary["ignored_reference_measures"], [4])
+        self.assertEqual(score["measures"], 3)
+        self.assertFalse(any(event.get("pitch") for event in score["events"]))
+
     def test_reconstructs_dense_scan_from_horizontal_positions(self):
         events = []
         for index in range(16):

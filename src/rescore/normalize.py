@@ -8,7 +8,7 @@ from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
-from .choros9 import reconstruct_scanned_rhythm
+from .choros9 import analyze_reference_calibration, reconstruct_scanned_rhythm
 from .musicxml import _read_musicxml, normalize_part_name, parse_musicxml
 
 
@@ -1111,6 +1111,81 @@ def build_meter_locked_musicxml(
         "grouped_tuplet_notes": grouped_tuplet_notes,
         "simplified_incomplete_tuplets": simplified_tuplets,
         "dropped_boundary_events": dropped_boundary_events,
+        "meter_validation": validation,
+    }
+
+
+def build_choros9_reference_musicxml(
+    candidate_path: Path,
+    reference_path: Path,
+    output: Path,
+    *,
+    verified_measures: int = 3,
+) -> dict:
+    """Create a score from only the manually verified opening measures.
+
+    The reference may contain an unfinished following measure. It is never used
+    for calibration or copied to the generated score.
+    """
+    candidate = parse_musicxml(candidate_path)
+    reference = parse_musicxml(reference_path)
+    if reference.get("measures", 0) < verified_measures:
+        raise ValueError(
+            f"a referência contém {reference.get('measures', 0)} compassos; "
+            f"eram esperados pelo menos {verified_measures}"
+        )
+    calibration = analyze_reference_calibration(
+        candidate, reference, verified_measures=verified_measures
+    )
+    root = ET.fromstring(_read_musicxml(reference_path))
+    # MuseScore exports placeholder title metadata even when the source score
+    # has no title frame. Reimporting it creates a blank cover page, so the
+    # calibrated excerpt deliberately keeps only the musical system.
+    for credit in root.findall("credit"):
+        root.remove(credit)
+    for tag in ("work", "movement-number", "movement-title"):
+        node = root.find(tag)
+        if node is not None:
+            root.remove(node)
+    identification = root.find("identification")
+    if identification is not None:
+        for creator in list(identification.findall("creator")):
+            identification.remove(creator)
+        miscellaneous = identification.find("miscellaneous")
+        if miscellaneous is not None:
+            identification.remove(miscellaneous)
+    for part in root.findall("part"):
+        measures = part.findall("measure")
+        if len(measures) < verified_measures:
+            raise ValueError(
+                f"a parte {part.get('id', '')} não contém os "
+                f"{verified_measures} compassos verificados"
+            )
+        for measure in measures[verified_measures:]:
+            part.remove(measure)
+        for measure_index, measure in enumerate(part.findall("measure"), 1):
+            measure.set("number", str(measure_index))
+            for print_node in list(measure.findall("print")):
+                measure.remove(print_node)
+    tree = ET.ElementTree(root)
+    validation = _write_and_validate(
+        tree,
+        output,
+        lambda _part, _measure: Fraction(4),
+        # MuseScore omits trailing implicit rests from some verified tuplet
+        # voices (notably the lower harp staff). Reject overruns, but preserve
+        # those trusted underfills instead of rewriting the manual reference.
+        require_full=lambda _part, _measure: False,
+    )
+    return {
+        "output": str(output.resolve()),
+        "meter": "4/4",
+        "parts": len(root.findall("part")),
+        "measures": verified_measures,
+        "instrument_profile": "choros9-manual-reference",
+        "verified_reference_measures": verified_measures,
+        "ignored_reference_measures": calibration["ignored_reference_measures"],
+        "reference_calibration": calibration,
         "meter_validation": validation,
     }
 

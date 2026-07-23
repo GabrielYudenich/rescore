@@ -38,6 +38,36 @@ CHOROS9_PART_NAMES = (
     "Contrebasses",
 )
 
+# Mapping from the 24 staves retained by the opening-page OMR to the expanded
+# orchestral template supplied by the user. The reference IDs are top-to-bottom
+# MuseScore/MusicXML part IDs; staff numbers distinguish grand staves.
+CHOROS9_OPENING_REFERENCE_MAP: dict[str, tuple[tuple[str, str | None], ...]] = {
+    "P1": (("P1", None),),
+    "P2": (("P2", None), ("P3", None)),
+    "P3": (("P4", None), ("P5", None)),
+    "P4": (("P6", None),),
+    "P5": (("P7", None), ("P8", None)),
+    "P6": (("P9", None),),
+    "P7": (("P10", None), ("P11", None)),
+    "P8": (("P12", None),),
+    "P9": (("P13", None), ("P14", None)),
+    "P10": (("P15", None), ("P16", None)),
+    "P11": (("P17", None), ("P18", None), ("P19", None), ("P20", None)),
+    "P12": (("P21", None), ("P22", None)),
+    "P13": (("P23", None), ("P24", None)),
+    "P14": (("P25", None),),
+    "P15": (("P26", None),),
+    "P16": (("P29", "1"),),
+    "P17": (("P29", "2"),),
+    "P18": (("P30", "1"),),
+    "P19": (("P30", "2"),),
+    "P20": (("P31", None),),
+    "P21": (("P32", None),),
+    "P22": (("P33", None),),
+    "P23": (("P34", None),),
+    "P24": (("P35", None),),
+}
+
 
 def _fraction_text(value: Fraction) -> str:
     return (
@@ -261,6 +291,134 @@ def reconstruct_scanned_rhythm(score: dict, meter: str) -> dict:
         "impossible_prefix_events_removed": impossible_prefixes_removed,
         "removed_prefixes": removed_prefixes,
         "streams_using_thirty_second_grid": thirty_second_streams,
+    }
+
+
+def _event_counter(
+    events: list[dict], *, include_pitch: bool
+) -> dict[tuple, int]:
+    counter: dict[tuple, int] = defaultdict(int)
+    for event in events:
+        key = (
+            int(event["measure_index"]),
+            event["onset"],
+            event["duration"],
+            event.get("pitch") if include_pitch else bool(event.get("pitch")),
+        )
+        counter[key] += 1
+    return counter
+
+
+def _counter_metric(reference: dict[tuple, int], candidate: dict[tuple, int]) -> dict:
+    keys = set(reference) | set(candidate)
+    matched = sum(min(reference.get(key, 0), candidate.get(key, 0)) for key in keys)
+    reference_count = sum(reference.values())
+    candidate_count = sum(candidate.values())
+    precision = matched / candidate_count if candidate_count else 0.0
+    recall = matched / reference_count if reference_count else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if precision + recall
+        else 0.0
+    )
+    return {
+        "matched": matched,
+        "reference": reference_count,
+        "candidate": candidate_count,
+        "precision": round(precision, 4),
+        "recall": round(recall, 4),
+        "f1": round(f1, 4),
+    }
+
+
+def analyze_reference_calibration(
+    candidate: dict, reference: dict, *, verified_measures: int = 3
+) -> dict:
+    """Compare condensed OMR with an expanded, manually verified reference."""
+    reconstruction = reconstruct_scanned_rhythm(candidate, "4/4")
+    candidate_parts = {part["id"]: part["name"] for part in candidate["parts"]}
+    reference_parts = {part["id"]: part["name"] for part in reference["parts"]}
+    per_source = []
+    identical_target_pairs = []
+    reference_events_by_part: dict[str, list[dict]] = defaultdict(list)
+    for event in reference["events"]:
+        if int(event["measure_index"]) <= verified_measures and event.get("pitch"):
+            reference_events_by_part[event["part_id"]].append(event)
+
+    for source_id, targets in CHOROS9_OPENING_REFERENCE_MAP.items():
+        source_events = [
+            event
+            for event in candidate["events"]
+            if event["part_id"] == source_id
+            and int(event["measure_index"]) <= verified_measures
+            and event.get("pitch")
+        ]
+        target_events = []
+        target_names = []
+        target_token_sets: list[tuple[str, dict[tuple, int]]] = []
+        for target_id, staff in targets:
+            selected = [
+                event
+                for event in reference_events_by_part.get(target_id, [])
+                if staff is None or event.get("staff", "1") == staff
+            ]
+            target_events.extend(selected)
+            label = reference_parts.get(target_id, target_id)
+            if staff:
+                label = f"{label} — pauta {staff}"
+            target_names.append(label)
+            target_token_sets.append((label, _event_counter(selected, include_pitch=True)))
+        for left_index, (left_name, left_tokens) in enumerate(target_token_sets):
+            for right_name, right_tokens in target_token_sets[left_index + 1 :]:
+                if left_tokens and left_tokens == right_tokens:
+                    identical_target_pairs.append(
+                        {
+                            "source_part": source_id,
+                            "left": left_name,
+                            "right": right_name,
+                            "relation": "duplicação exata nos compassos verificados",
+                        }
+                    )
+        per_source.append(
+            {
+                "source_part": source_id,
+                "source_name": candidate_parts.get(source_id, source_id),
+                "reference_targets": target_names,
+                "pitch_and_timing": _counter_metric(
+                    _event_counter(target_events, include_pitch=True),
+                    _event_counter(source_events, include_pitch=True),
+                ),
+                "timing_only": _counter_metric(
+                    _event_counter(target_events, include_pitch=False),
+                    _event_counter(source_events, include_pitch=False),
+                ),
+                "reference_tuplet_events": sum(
+                    bool(event.get("tuplet")) for event in target_events
+                ),
+                "candidate_tuplet_events": sum(
+                    bool(event.get("tuplet")) for event in source_events
+                ),
+            }
+        )
+
+    reference_tuplet_parts = [
+        {
+            "part_id": part_id,
+            "part_name": reference_parts.get(part_id, part_id),
+            "events": sum(bool(event.get("tuplet")) for event in events),
+        }
+        for part_id, events in reference_events_by_part.items()
+        if any(event.get("tuplet") for event in events)
+    ]
+    return {
+        "verified_measures": verified_measures,
+        "candidate_position_reconstruction": reconstruction,
+        "source_to_reference_map": per_source,
+        "identical_reference_targets": identical_target_pairs,
+        "reference_tuplet_parts": reference_tuplet_parts,
+        "ignored_reference_measures": list(
+            range(verified_measures + 1, reference.get("measures", 0) + 1)
+        ),
     }
 
 

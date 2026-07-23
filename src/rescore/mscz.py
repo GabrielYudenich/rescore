@@ -139,6 +139,51 @@ def _read_mscx(path: Path) -> tuple[ET.Element, str]:
         return ET.fromstring(archive.read(member)), member
 
 
+def remove_leading_empty_vboxes(path: Path) -> int:
+    """Remove empty cover-page frames introduced by a MusicXML round trip."""
+    root, member = _read_mscx(path)
+    score = root.find("Score")
+    if score is None:
+        raise ValueError("arquivo MuseScore sem elemento Score")
+    removed = 0
+    for staff in score.findall("Staff"):
+        for child in list(staff):
+            if child.tag == "Measure":
+                break
+            if child.tag != "VBox":
+                continue
+            meaningful = [
+                node
+                for node in child
+                if node.tag not in {"height", "width", "eid"} and (node.text or "").strip()
+            ]
+            if meaningful:
+                continue
+            staff.remove(child)
+            removed += 1
+    if not removed:
+        return 0
+    data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    with tempfile.NamedTemporaryFile(
+        prefix=f".{path.stem}-", suffix=".mscz", dir=path.parent, delete=False
+    ) as temporary:
+        temporary_path = Path(temporary.name)
+    try:
+        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(
+            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
+        ) as destination:
+            destination.comment = source.comment
+            for info in source.infolist():
+                destination.writestr(
+                    info, data if info.filename == member else source.read(info.filename)
+                )
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+    return removed
+
+
 def graft_reference_measures(reference: Path, target: Path, measure_count: int) -> None:
     """Replace the opening measures of a generated score with the exact MSCX reference."""
     reference_root, _ = _read_mscx(reference)

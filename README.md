@@ -116,11 +116,20 @@ orquestrais usados durante o desenvolvimento:
 ```powershell
 python run.py --pdf "partitura.pdf" --pages 3 --meter 4/4
 python run.py --profile choros9 --pdf "grade-escaneada.pdf" --pages 3-10
+python run.py --profile choros9 --pdf "grade-escaneada.pdf" --pages 3 `
+  --reference-mscz "referencia-manual.mscz"
 ```
 
 Sem `--pages`, ele pergunta o intervalo. O perfil de digitalização processa as
 páginas separadamente para que uma página difícil não interrompa o lote inteiro.
 Não fixe `--meter` em um intervalo que contenha mudanças de fórmula.
+
+Quando uma referência manual é fornecida para a abertura do Choros 9, somente os
+três primeiros compassos são considerados verificados. Um quarto compasso
+incompleto é ignorado. O programa expande as pautas condensadas para o modelo de 35
+partes, preserva literalmente os compassos confirmados e grava um relatório de
+calibração por instrumento. Se existir `Choros 9.mscz` na raiz, o `run.py` o detecta
+automaticamente.
 
 ## Arquivos produzidos
 
