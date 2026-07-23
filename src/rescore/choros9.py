@@ -849,6 +849,327 @@ def extract_measure_candidate(
     }
 
 
+def _pitch_rank(note: ET.Element) -> int:
+    pitch = note.find("pitch")
+    if pitch is None:
+        return -10**6
+    steps = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+    step = steps.get(pitch.findtext("step") or "", 0)
+    alter = int(float(pitch.findtext("alter") or "0"))
+    octave = int(pitch.findtext("octave") or "0")
+    return (octave + 1) * 12 + step + alter
+
+
+def _pitch_label(note: ET.Element) -> str | None:
+    pitch = note.find("pitch")
+    if pitch is None:
+        return None
+    alter = int(float(pitch.findtext("alter") or "0"))
+    accidental = "#" * max(0, alter) + "b" * max(0, -alter)
+    return f"{pitch.findtext('step')}{accidental}{pitch.findtext('octave')}"
+
+
+def _remove_print_nodes(measure: ET.Element) -> None:
+    for print_node in list(measure.findall("print")):
+        measure.remove(print_node)
+
+
+def _split_melodic_measure(
+    source: ET.Element,
+    *,
+    target_slot: int,
+    target_count: int,
+    source_part: str,
+    target_part: str,
+    global_measure: int,
+    report: dict,
+) -> ET.Element:
+    """Turn a condensed wind/brass chord into one playable line per player."""
+    measure = copy.deepcopy(source)
+    _remove_print_nodes(measure)
+    children = list(measure)
+    groups: list[list[ET.Element]] = []
+    current: list[ET.Element] | None = None
+    for child in children:
+        if child.tag != "note":
+            continue
+        if child.find("chord") is None or current is None:
+            current = [child]
+            groups.append(current)
+        else:
+            current.append(child)
+    for group in groups:
+        pitched = [note for note in group if note.find("pitch") is not None]
+        if len(pitched) <= 1:
+            continue
+        ordered = sorted(pitched, key=_pitch_rank, reverse=True)
+        if target_count == 1:
+            selected_index = len(ordered) // 2
+        else:
+            selected_index = round(
+                target_slot * (len(ordered) - 1) / (target_count - 1)
+            )
+        selected = ordered[selected_index]
+        removed = []
+        for note in pitched:
+            if note is selected:
+                chord = note.find("chord")
+                if chord is not None:
+                    note.remove(chord)
+                continue
+            removed.append(_pitch_label(note))
+            measure.remove(note)
+        report["condensed_chord_notes_removed"] += len(removed)
+        report["condensed_chord_repairs"].append(
+            {
+                "measure": global_measure,
+                "source_part": source_part,
+                "target_part": target_part,
+                "target_slot": target_slot + 1,
+                "target_count": target_count,
+                "kept_pitch": _pitch_label(selected),
+                "removed_pitches": removed,
+            }
+        )
+        if len(ordered) > target_count and target_slot == 0:
+            report["ambiguous_chord_groups"].append(
+                {
+                    "measure": global_measure,
+                    "source_part": source_part,
+                    "recognized_pitches": [
+                        _pitch_label(note) for note in ordered
+                    ],
+                    "available_players": target_count,
+                }
+            )
+    return measure
+
+
+def _set_staff_number(element: ET.Element, staff_number: str) -> None:
+    for note in element.iter("note"):
+        staff = note.find("staff")
+        if staff is None:
+            staff = ET.SubElement(note, "staff")
+        staff.text = staff_number
+    for direction in element.iter("direction"):
+        staff = direction.find("staff")
+        if staff is None:
+            staff = ET.SubElement(direction, "staff")
+        staff.text = staff_number
+
+
+def _combine_grand_staff_measure(
+    upper_source: ET.Element,
+    lower_source: ET.Element,
+    target_part: ET.Element,
+    number: int,
+) -> ET.Element:
+    upper = copy.deepcopy(upper_source)
+    lower = copy.deepcopy(lower_source)
+    _remove_print_nodes(upper)
+    _remove_print_nodes(lower)
+    _set_staff_number(upper, "1")
+    _set_staff_number(lower, "2")
+    result = ET.Element("measure", {"number": str(number)})
+
+    upper_attributes = upper.find("attributes")
+    if upper_attributes is not None:
+        attributes = copy.deepcopy(upper_attributes)
+    else:
+        attributes = ET.Element("attributes")
+        ET.SubElement(attributes, "divisions").text = "3360"
+        time = ET.SubElement(attributes, "time")
+        ET.SubElement(time, "beats").text = "4"
+        ET.SubElement(time, "beat-type").text = "4"
+    staves = attributes.find("staves")
+    if staves is None:
+        staves = ET.SubElement(attributes, "staves")
+    staves.text = "2"
+    for clef in list(attributes.findall("clef")):
+        attributes.remove(clef)
+    reference_attributes = target_part.find("./measure/attributes")
+    if reference_attributes is not None:
+        for clef in reference_attributes.findall("clef"):
+            attributes.append(copy.deepcopy(clef))
+    result.append(attributes)
+
+    upper_barlines = [copy.deepcopy(node) for node in upper.findall("barline")]
+    lower_barlines = [copy.deepcopy(node) for node in lower.findall("barline")]
+    for child in list(upper):
+        if child.tag not in {"attributes", "print", "barline"}:
+            result.append(copy.deepcopy(child))
+    divisions = int(attributes.findtext("divisions") or "3360")
+    backup = ET.SubElement(result, "backup")
+    ET.SubElement(backup, "duration").text = str(divisions * 4)
+    for child in list(lower):
+        if child.tag not in {"attributes", "print", "barline"}:
+            result.append(copy.deepcopy(child))
+    for barline in lower_barlines or upper_barlines:
+        result.append(barline)
+    return result
+
+
+def _full_measure_rest(number: int, divisions: int = 3360) -> ET.Element:
+    measure = ET.Element("measure", {"number": str(number)})
+    attributes = ET.SubElement(measure, "attributes")
+    ET.SubElement(attributes, "divisions").text = str(divisions)
+    time = ET.SubElement(attributes, "time")
+    ET.SubElement(time, "beats").text = "4"
+    ET.SubElement(time, "beat-type").text = "4"
+    note = ET.SubElement(measure, "note")
+    ET.SubElement(note, "rest", {"measure": "yes"})
+    ET.SubElement(note, "duration").text = str(divisions * 4)
+    ET.SubElement(note, "voice").text = "1"
+    ET.SubElement(note, "type").text = "whole"
+    return measure
+
+
+def build_choros9_continuous_musicxml(
+    opening: Path,
+    continuations: list[Path],
+    output: Path,
+) -> dict:
+    """Expand scanned continuation pages into the verified 35-part template."""
+    root = ET.fromstring(_read_musicxml(opening))
+    target_parts = {part.get("id", ""): part for part in root.findall("part")}
+    if len(target_parts) != 35:
+        raise ValueError(
+            f"a abertura precisa ter 35 partes; encontradas {len(target_parts)}"
+        )
+    opening_measures = {
+        len(part.findall("measure")) for part in target_parts.values()
+    }
+    if opening_measures != {3}:
+        raise ValueError(
+            "a abertura contínua precisa conter exatamente três compassos verificados"
+        )
+    for part in target_parts.values():
+        for index, measure in enumerate(part.findall("measure"), 1):
+            measure.set("number", str(index))
+            _remove_print_nodes(measure)
+
+    target_mapping: dict[str, tuple[str, str | None, int, int]] = {}
+    for source_id, targets in CHOROS9_OPENING_REFERENCE_MAP.items():
+        melodic_targets = [target for target in targets if target[1] is None]
+        for target_id, staff in targets:
+            slot = (
+                melodic_targets.index((target_id, staff))
+                if staff is None
+                else 0
+            )
+            target_mapping[target_id] = (
+                source_id,
+                staff,
+                slot,
+                len(melodic_targets) if staff is None else 1,
+            )
+
+    report = {
+        "opening": str(opening.resolve()),
+        "continuations": [str(path.resolve()) for path in continuations],
+        "parts": 35,
+        "staves": 37,
+        "verified_opening_measures": 3,
+        "continuation_measures": 0,
+        "condensed_chord_notes_removed": 0,
+        "condensed_chord_repairs": [],
+        "ambiguous_chord_groups": [],
+        "empty_percussion_measures": 0,
+        "page_break_measures": [],
+    }
+    global_measure = 3
+    polyphonic_sources = {
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+    }
+    for continuation in continuations:
+        continuation_root = ET.fromstring(_read_musicxml(continuation))
+        source_parts = {
+            part.get("id", ""): part for part in continuation_root.findall("part")
+        }
+        if len(source_parts) != 24:
+            raise ValueError(
+                f"{continuation} precisa ter 24 pautas condensadas; "
+                f"foram encontradas {len(source_parts)}"
+            )
+        measure_counts = {
+            len(part.findall("measure")) for part in source_parts.values()
+        }
+        if len(measure_counts) != 1:
+            raise ValueError(
+                f"{continuation} possui contagens de compassos divergentes: "
+                f"{sorted(measure_counts)}"
+            )
+        page_measure_count = measure_counts.pop()
+        if page_measure_count < 1:
+            raise ValueError(f"{continuation} não contém compassos")
+        for local_measure in range(page_measure_count):
+            global_measure += 1
+            if local_measure == 0:
+                report["page_break_measures"].append(global_measure)
+            for target_id, target_part in target_parts.items():
+                if target_id in {"P27", "P28"}:
+                    measure = _full_measure_rest(global_measure)
+                    report["empty_percussion_measures"] += 1
+                elif target_id == "P29":
+                    measure = _combine_grand_staff_measure(
+                        source_parts["P16"].findall("measure")[local_measure],
+                        source_parts["P17"].findall("measure")[local_measure],
+                        target_part,
+                        global_measure,
+                    )
+                elif target_id == "P30":
+                    measure = _combine_grand_staff_measure(
+                        source_parts["P18"].findall("measure")[local_measure],
+                        source_parts["P19"].findall("measure")[local_measure],
+                        target_part,
+                        global_measure,
+                    )
+                else:
+                    source_id, _, target_slot, target_count = target_mapping[
+                        target_id
+                    ]
+                    source_measure = source_parts[source_id].findall("measure")[
+                        local_measure
+                    ]
+                    if source_id in polyphonic_sources:
+                        measure = copy.deepcopy(source_measure)
+                        _remove_print_nodes(measure)
+                    else:
+                        measure = _split_melodic_measure(
+                            source_measure,
+                            target_slot=target_slot,
+                            target_count=target_count,
+                            source_part=source_id,
+                            target_part=target_id,
+                            global_measure=global_measure,
+                            report=report,
+                        )
+                    measure.set("number", str(global_measure))
+                if target_id == "P1" and local_measure == 0:
+                    page_break = ET.Element("print", {"new-page": "yes"})
+                    measure.insert(0, page_break)
+                target_part.append(measure)
+            report["continuation_measures"] += 1
+
+    work_title = root.find("./work/work-title")
+    if work_title is not None:
+        work_title.text = "Choros No. 9 - abertura (rascunho OMR)"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    ET.ElementTree(root).write(output, encoding="utf-8", xml_declaration=True)
+    report["measures"] = global_measure
+    report["output"] = str(output.resolve())
+    return report
+
+
 def apply_choros9_part_profile(source: Path, output: Path) -> dict:
     """Replace unreliable OCR labels using the edition's stable staff order."""
     root = ET.fromstring(_read_musicxml(source))

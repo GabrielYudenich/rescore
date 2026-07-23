@@ -120,9 +120,12 @@ python run.py --profile choros9 --pdf "grade-escaneada.pdf" --pages 3 `
   --reference-mscz "referencia-manual.mscz"
 ```
 
-Sem `--pages`, ele pergunta o intervalo. O perfil de digitalização processa as
-páginas separadamente para que uma página difícil não interrompa o lote inteiro.
-Não fixe `--meter` em um intervalo que contenha mudanças de fórmula.
+Sem `--pages`, ele pergunta o intervalo. O perfil de digitalização recupera as
+páginas separadamente para que uma página difícil não interrompa o lote, mas esse
+isolamento é apenas interno. Quando o intervalo contínuo começa na página 3 e existe
+uma referência manual, a entrega principal é uma única partitura com todos os
+compassos e um PDF A3 horizontal. Não fixe `--meter` em um intervalo que contenha
+mudanças de fórmula.
 
 As páginas 3-7 do Choros 9 herdam a fórmula inicial 4/4. O pré-processamento
 também diferencia cunhas musicais normais de anotações manuscritas gigantes:
@@ -141,6 +144,12 @@ partes, preserva literalmente os compassos confirmados e grava um relatório de
 calibração por instrumento. Se existir `Choros 9.mscz` na raiz, o `run.py` o detecta
 automaticamente.
 
+Na montagem contínua, as 24 pautas condensadas do scan são expandidas para 35
+partes/37 pautas. Acordes reconhecidos em pautas monofônicas de sopros e metais são
+distribuídos entre os executantes disponíveis; alturas excedentes e ambíguas não
+são escondidas, mas registradas em `playability-report.json`. Cordas, tímpanos,
+celesta e harpa preservam sua escrita polifônica.
+
 ## Arquivos produzidos
 
 Uma conversão pode gerar:
@@ -153,6 +162,10 @@ output/conversion/
   normalized.musicxml            MusicXML pós-processado
   normalized.mscz                arquivo editável
   normalized.pdf                 conferência visual
+  continuous/
+    choros9-continuous.mscz       partitura única para revisão
+    choros9-continuous-A3.pdf     PDF A3 horizontal, sempre gerado
+    playability-report.json       divisões e ambiguidades instrumentais
   manifest.json                  entradas, saídas e resumo
   measure-audit.json             validação métrica
   musescore-validation.json      validação após importação

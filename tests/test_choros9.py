@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from fractions import Fraction
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import numpy as np
 from rescore.choros9 import (
     analyze_doublings,
     audit_measure_structure,
+    build_choros9_continuous_musicxml,
     extract_measure_candidate,
     merge_measure_candidates,
     reconstruct_scanned_rhythm,
@@ -79,6 +81,49 @@ def _opening_score(names: list[str]) -> str:
     )
 
 
+def _continuous_fixture(parts: int, measures: int, condensed_chord: bool = False) -> str:
+    score_parts = "".join(
+        f'<score-part id="P{index}"><part-name>Part {index}</part-name></score-part>'
+        for index in range(1, parts + 1)
+    )
+    part_nodes = []
+    for part_index in range(1, parts + 1):
+        measure_nodes = []
+        for measure_number in range(1, measures + 1):
+            attributes = (
+                "<attributes><divisions>1</divisions>"
+                "<time><beats>4</beats><beat-type>4</beat-type></time>"
+                "<clef><sign>G</sign><line>2</line></clef></attributes>"
+            )
+            if condensed_chord and part_index == 2:
+                notes = "".join(
+                    (
+                        "<note>"
+                        + ("<chord/>" if chord else "")
+                        + f"<pitch><step>{step}</step><octave>5</octave></pitch>"
+                        "<duration>4</duration><voice>1</voice><type>whole</type>"
+                        "</note>"
+                    )
+                    for chord, step in ((False, "C"), (True, "E"), (True, "G"))
+                )
+            else:
+                notes = (
+                    '<note><rest measure="yes"/><duration>4</duration>'
+                    "<voice>1</voice><type>whole</type></note>"
+                )
+            measure_nodes.append(
+                f'<measure number="{measure_number}">{attributes}{notes}</measure>'
+            )
+        part_nodes.append(
+            f'<part id="P{part_index}">{"".join(measure_nodes)}</part>'
+        )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<score-partwise version="4.0"><part-list>'
+        f'{score_parts}</part-list>{"".join(part_nodes)}</score-partwise>'
+    )
+
+
 class Choros9Tests(unittest.TestCase):
     def test_reference_builder_ignores_unfinished_fourth_measure(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -96,6 +141,40 @@ class Choros9Tests(unittest.TestCase):
         self.assertEqual(summary["ignored_reference_measures"], [4])
         self.assertEqual(score["measures"], 3)
         self.assertFalse(any(event.get("pitch") for event in score["events"]))
+
+    def test_builds_one_continuous_expanded_score_and_splits_wind_chord(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            opening = root / "opening.musicxml"
+            continuation = root / "page-4.musicxml"
+            output = root / "continuous.musicxml"
+            opening.write_text(
+                _continuous_fixture(35, 3), encoding="utf-8"
+            )
+            continuation.write_text(
+                _continuous_fixture(24, 1, condensed_chord=True),
+                encoding="utf-8",
+            )
+            report = build_choros9_continuous_musicxml(
+                opening, [continuation], output
+            )
+            score = ET.parse(output).getroot()
+        self.assertEqual(len(score.findall("part")), 35)
+        self.assertEqual(
+            {len(part.findall("measure")) for part in score.findall("part")},
+            {4},
+        )
+        player_one = score.find("./part[@id='P2']/measure[@number='4']")
+        player_two = score.find("./part[@id='P3']/measure[@number='4']")
+        self.assertEqual(
+            [note.findtext("./pitch/step") for note in player_one.findall("note")],
+            ["G"],
+        )
+        self.assertEqual(
+            [note.findtext("./pitch/step") for note in player_two.findall("note")],
+            ["C"],
+        )
+        self.assertEqual(report["ambiguous_chord_groups"][0]["available_players"], 2)
 
     def test_reconstructs_dense_scan_from_horizontal_positions(self):
         events = []

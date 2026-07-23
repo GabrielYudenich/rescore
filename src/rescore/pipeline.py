@@ -9,12 +9,14 @@ from pathlib import Path
 from .mscz import (
     extract_score_style,
     graft_reference_measures,
+    inspect_mscz,
     normalize_fixed_meter_padding,
     normalize_mscz_voice_durations,
     normalize_meter_map_padding,
     remove_leading_empty_vboxes,
     replace_score_style,
     set_automatic_beaming,
+    set_page_layout,
     sha256,
     validate_fixed_meter_mscz,
     validate_meter_map_mscz,
@@ -24,6 +26,7 @@ from .musicxml import compare_scores, parse_musicxml, write_canonical
 from .choros9 import (
     analyze_doublings,
     audit_measure_structure,
+    build_choros9_continuous_musicxml,
     extract_measure_candidate,
     merge_measure_candidates,
 )
@@ -423,6 +426,14 @@ def convert(
         candidate_mscz,
         output_dir / "musescore.log",
     )
+    if scan_profile:
+        set_page_layout(
+            candidate_mscz,
+            paper="A3",
+            landscape=True,
+            margin_inches=0.45,
+            spatium_mm=0.56,
+        )
 
     candidate_score = parse_musicxml(candidate)
     canonical_path = output_dir / "candidate.canonical.json"
@@ -499,6 +510,15 @@ def convert(
         )
         if style_path:
             replace_score_style(normalized_mscz_path, style_path)
+        scan_page_layout = None
+        if scan_profile:
+            scan_page_layout = set_page_layout(
+                normalized_mscz_path,
+                paper="A3",
+                landscape=True,
+                margin_inches=0.45,
+                spatium_mm=0.56,
+            )
         if scan_profile and pages == [3]:
             removed_cover_frames = remove_leading_empty_vboxes(normalized_mscz_path)
             musescore_validation = validate_fixed_meter_mscz(
@@ -507,6 +527,7 @@ def convert(
             musescore_validation["verified_reference_measures"] = 3
             musescore_validation["ignored_reference_measure"] = 4
             musescore_validation["removed_empty_cover_frames"] = removed_cover_frames
+            musescore_validation["page_layout"] = scan_page_layout
             if not musescore_validation["valid"]:
                 raise ValueError(
                     "validação do MuseScore falhou: "
@@ -583,11 +604,24 @@ def convert(
             normalized_mscz_path, meter_beats, meter_beat_type
         )
         automatic_beaming = set_automatic_beaming(normalized_mscz_path, start_measure=1)
+        scan_page_layout = (
+            set_page_layout(
+                normalized_mscz_path,
+                paper="A3",
+                landscape=True,
+                margin_inches=0.45,
+                spatium_mm=0.56,
+            )
+            if scan_profile
+            else None
+        )
         musescore_validation = validate_fixed_meter_mscz(
             normalized_mscz_path, meter_beats, meter_beat_type
         )
         musescore_validation["padding_repairs"] = padding_repairs
         musescore_validation["automatic_beaming"] = automatic_beaming
+        if scan_page_layout:
+            musescore_validation["page_layout"] = scan_page_layout
         if not musescore_validation["valid"]:
             raise ValueError(
                 f"validação do MuseScore falhou: {musescore_validation['violations'][:3]}"
@@ -965,6 +999,138 @@ def assemble_movement1_pages_7_12(
     }
     (output_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return manifest
+
+
+def assemble_choros9_continuous(
+    project_root: Path,
+    opening_musicxml: Path,
+    continuation_musicxml: list[Path],
+    reference_mscz: Path,
+    output_dir: Path,
+) -> dict:
+    """Create the single continuous Choros review score and its A3 PDF."""
+    musescore = find_musescore(project_root)
+    if not musescore:
+        raise FileNotFoundError("MuseScore não encontrado; execute `rescore doctor`")
+    if not reference_mscz.is_file():
+        raise FileNotFoundError(f"referência MuseScore não encontrada: {reference_mscz}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    normalized_xml = output_dir / "choros9-continuous.musicxml"
+    playability = build_choros9_continuous_musicxml(
+        opening_musicxml,
+        continuation_musicxml,
+        normalized_xml,
+    )
+    playability_path = output_dir / "playability-report.json"
+    playability_path.write_text(
+        json.dumps(playability, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    reference_style = extract_score_style(
+        reference_mscz, output_dir / "reference-style.mss"
+    )
+    normalized_mscz = output_dir / "choros9-continuous.mscz"
+    convert_with_musescore(
+        musescore,
+        normalized_xml,
+        normalized_mscz,
+        output_dir / "musescore-continuous.log",
+        style=reference_style,
+    )
+    removed_cover_frames = remove_leading_empty_vboxes(normalized_mscz)
+    automatic_beaming = set_automatic_beaming(normalized_mscz, start_measure=1)
+    page_layout = set_page_layout(
+        normalized_mscz,
+        paper="A3",
+        landscape=True,
+        margin_inches=0.45,
+        spatium_mm=0.56,
+    )
+    validation = validate_fixed_meter_mscz(normalized_mscz, 4, 4)
+    validation.update(
+        {
+            "removed_empty_cover_frames": removed_cover_frames,
+            "automatic_beaming": automatic_beaming,
+            "page_layout": page_layout,
+        }
+    )
+    if not validation["valid"]:
+        raise ValueError(
+            "validação da partitura contínua falhou: "
+            f"{validation['violations'][:3]}"
+        )
+    mscz_inspection = inspect_mscz(normalized_mscz)
+    if (
+        mscz_inspection["parts_count"] != 35
+        or mscz_inspection["staves_count"] != 37
+    ):
+        raise ValueError(
+            "a grade contínua perdeu instrumentos durante a importação: "
+            f"{mscz_inspection['parts_count']} partes, "
+            f"{mscz_inspection['staves_count']} pautas"
+        )
+    validation["inspection"] = {
+        "parts": mscz_inspection["parts_count"],
+        "staves": mscz_inspection["staves_count"],
+        "measures": mscz_inspection["measures"],
+    }
+    validation_path = output_dir / "musescore-validation.json"
+    validation_path.write_text(
+        json.dumps(validation, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    normalized_pdf = output_dir / "choros9-continuous-A3.pdf"
+    convert_with_musescore(
+        musescore,
+        normalized_mscz,
+        normalized_pdf,
+        output_dir / "musescore-continuous-pdf.log",
+    )
+    pdf_summary = pdf_info(normalized_pdf)
+    previews = render_pages(
+        normalized_pdf,
+        f"1-{pdf_summary['pages']}",
+        output_dir / "preview",
+        dpi=180,
+    )
+    manifest = {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "input": {
+            "opening_musicxml": str(opening_musicxml.resolve()),
+            "continuation_musicxml": [
+                str(path.resolve()) for path in continuation_musicxml
+            ],
+            "reference_mscz": str(reference_mscz.resolve()),
+        },
+        "summary": {
+            "parts": mscz_inspection["parts_count"],
+            "staves": mscz_inspection["staves_count"],
+            "measures": mscz_inspection["measures"],
+            "pdf_pages": pdf_summary["pages"],
+            "paper": "A3 landscape",
+            "meter": "4/4",
+            "removed_impossible_condensed_notes": playability[
+                "condensed_chord_notes_removed"
+            ],
+            "ambiguous_chord_groups": len(playability["ambiguous_chord_groups"]),
+        },
+        "artifacts": {
+            "normalized_musicxml": str(normalized_xml.resolve()),
+            "normalized_musescore": str(normalized_mscz.resolve()),
+            "normalized_pdf": str(normalized_pdf.resolve()),
+            "normalized_previews": [str(path.resolve()) for path in previews],
+            "playability_report": str(playability_path.resolve()),
+            "musescore_validation": str(validation_path.resolve()),
+        },
+    }
+    (output_dir / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
     return manifest
 

@@ -120,9 +120,12 @@ python run.py `
 O perfil atual considera verificados apenas os três primeiros compassos dessa
 referência e ignora qualquer quarto compasso inacabado.
 
-As páginas são isoladas e cada falha aparece no manifesto do lote. Esse modo é mais
-resiliente, porém scans manuscritos ou muito degradados exigem consideravelmente mais
-revisão que uma edição digital.
+As páginas são isoladas somente durante a recuperação, e cada falha aparece no
+manifesto do lote. Se o intervalo contínuo começa na página 3, o resultado final fica
+em `continuous/choros9-continuous.mscz`, acompanhado de
+`continuous/choros9-continuous-A3.pdf`. O PDF usa uma página A3 horizontal por folha
+fonte, com os compassos no mesmo sistema. Scans manuscritos ou muito degradados ainda
+exigem consideravelmente mais revisão que uma edição digital.
 
 Para validar a abertura confirmada em 4/4 e o filtro de anotações:
 
@@ -136,6 +139,12 @@ python run.py `
 As páginas 3-7 herdam 4/4. O relatório `scan-preprocess.json` informa se alguma
 anotação externa foi detectada, sua caixa, continuidade e quantidade de pixels
 removidos.
+
+O arquivo `continuous/playability-report.json` lista acordes impossíveis encontrados
+em linhas monofônicas, a nota destinada a cada executante e qualquer altura descartada
+por exceder o número de músicos daquela pauta. Esse relatório deve ser conferido
+junto ao PDF, pois consistência mecânica não prova que a altura reconhecida está
+correta.
 
 ## Diagnóstico de problemas
 

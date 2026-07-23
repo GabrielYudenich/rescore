@@ -118,6 +118,12 @@ Compassos incompletos posteriores da referência são removidos da cópia de tra
 e listados no relatório. Para páginas novas, a referência fornece a estrutura da
 orquestra, mas não autoriza copiar material musical antigo.
 
+As páginas continuam sendo reconhecidas isoladamente para permitir retomada, mas a
+publicação não é fragmentada. O montador contínuo acrescenta cada bloco de compassos
+ao modelo de 35 partes, separa acordes de pautas monofônicas entre os executantes,
+valida todas as vozes em 4/4 e exporta `.mscz` e PDF A3 horizontal. Quebras de página
+são decisões de visualização; não criam novas partituras nem reiniciam a contagem.
+
 ## Artefatos e retomada
 
 Cada etapa grava seus próprios artefatos e logs. Uma execução posterior reutiliza o

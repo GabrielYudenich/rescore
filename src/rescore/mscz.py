@@ -126,6 +126,103 @@ def replace_score_style(path: Path, style_path: Path) -> None:
             temporary_path.unlink()
 
 
+def set_page_layout(
+    path: Path,
+    *,
+    paper: str = "A3",
+    landscape: bool = True,
+    margin_inches: float = 0.45,
+    spatium_mm: float = 0.56,
+) -> dict:
+    """Set a predictable review layout without changing musical content.
+
+    MuseScore stores page dimensions in inches and ``spatium`` in millimetres.
+    A compact spatium is intentional for orchestral full scores: it keeps one
+    complete system visible on the page while the wide paper gives measures
+    enough horizontal room.
+    """
+    papers = {
+        "A3": (11.69, 16.54),
+        "A4": (8.27, 11.69),
+    }
+    normalized_paper = paper.strip().upper()
+    if normalized_paper not in papers:
+        raise ValueError(f"papel não suportado: {paper}; use A3 ou A4")
+    short_side, long_side = papers[normalized_paper]
+    width, height = (
+        (long_side, short_side) if landscape else (short_side, long_side)
+    )
+    if margin_inches <= 0 or margin_inches * 2 >= min(width, height):
+        raise ValueError("margem inválida para o tamanho de página")
+    if spatium_mm <= 0:
+        raise ValueError("spatium precisa ser positivo")
+
+    with zipfile.ZipFile(path) as archive:
+        style_names = [
+            name for name in archive.namelist() if name.endswith("score_style.mss")
+        ]
+        if len(style_names) != 1:
+            raise ValueError(f"estilo interno não encontrado em {path}")
+        style_name = style_names[0]
+        style_root = ET.fromstring(archive.read(style_name))
+    style = style_root.find("Style")
+    if style is None:
+        raise ValueError(f"score_style.mss inválido em {path}")
+
+    values = {
+        "pageWidth": width,
+        "pageHeight": height,
+        "pagePrintableWidth": width - 2 * margin_inches,
+        "pageEvenLeftMargin": margin_inches,
+        "pageOddLeftMargin": margin_inches,
+        "pageEvenTopMargin": margin_inches,
+        "pageOddTopMargin": margin_inches,
+        "pageEvenBottomMargin": margin_inches,
+        "pageOddBottomMargin": margin_inches,
+        "pageTwosided": 0,
+        "spatium": spatium_mm,
+        # Justify even sparse review systems. Without this MuseScore may leave
+        # three recognized measures occupying only a quarter of an A3 sheet.
+        "lastSystemFillLimit": 0.1,
+    }
+    for name, value in values.items():
+        node = style.find(name)
+        if node is None:
+            node = ET.SubElement(style, name)
+        node.text = f"{value:.6f}".rstrip("0").rstrip(".")
+    style_data = ET.tostring(style_root, encoding="utf-8", xml_declaration=True)
+
+    with tempfile.NamedTemporaryFile(
+        prefix=f".{path.stem}-", suffix=".mscz", dir=path.parent, delete=False
+    ) as temporary:
+        temporary_path = Path(temporary.name)
+    try:
+        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(
+            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
+        ) as destination:
+            destination.comment = source.comment
+            for info in source.infolist():
+                destination.writestr(
+                    info,
+                    style_data
+                    if info.filename == style_name
+                    else source.read(info.filename),
+                )
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+    return {
+        "paper": normalized_paper,
+        "orientation": "landscape" if landscape else "portrait",
+        "width_inches": width,
+        "height_inches": height,
+        "printable_width_inches": width - 2 * margin_inches,
+        "margin_inches": margin_inches,
+        "spatium_mm": spatium_mm,
+    }
+
+
 def _mscx_member(archive: zipfile.ZipFile) -> str:
     members = [name for name in archive.namelist() if name.lower().endswith(".mscx")]
     if len(members) != 1:

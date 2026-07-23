@@ -12,6 +12,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from rescore.pages import compact_page_spec, parse_page_spec  # noqa: E402
 from rescore.musicxml import parse_musicxml  # noqa: E402
 from rescore.pipeline import (  # noqa: E402
+    assemble_choros9_continuous,
     assemble_movement1_complete,
     assemble_movement1_pages_7_12,
     assemble_scherzo_complete,
@@ -77,7 +78,7 @@ def _convert_choros9_pages(
     reference_musicxml: Path | None = None,
     reference_mscz: Path | None = None,
 ) -> dict:
-    """Process scanned pages independently so one difficult page cannot abort a batch."""
+    """Recover pages independently, then publish one continuous review score."""
     output.mkdir(parents=True, exist_ok=True)
     successes = []
     failures = []
@@ -180,6 +181,50 @@ def _convert_choros9_pages(
             "normalized_pdf": successes[0]["pdf"] if len(successes) == 1 else None,
         },
     }
+    can_assemble = (
+        reference_mscz is not None
+        and reference_mscz.is_file()
+        and pages == list(range(3, pages[-1] + 1))
+        and len(pages) > 1
+        and not failures
+        and [item["page"] for item in successes] == pages
+    )
+    if can_assemble:
+        print("Choros Nº 9: montando uma partitura contínua e o PDF A3...")
+        try:
+            continuous = assemble_choros9_continuous(
+                PROJECT_ROOT,
+                Path(successes[0]["musicxml"]),
+                [Path(item["musicxml"]) for item in successes[1:]],
+                reference_mscz,
+                output / "continuous",
+            )
+        except Exception as exc:
+            batch["continuous_error"] = str(exc)
+            print(f"  montagem contínua marcada para revisão: {exc}")
+        else:
+            continuous_artifacts = continuous["artifacts"]
+            batch["continuous"] = continuous
+            batch["summary"]["continuous_score"] = True
+            batch["artifacts"].update(
+                {
+                    "normalized_musicxml": continuous_artifacts[
+                        "normalized_musicxml"
+                    ],
+                    "normalized_musescore": continuous_artifacts[
+                        "normalized_musescore"
+                    ],
+                    "normalized_pdf": continuous_artifacts["normalized_pdf"],
+                    "normalized_previews": continuous_artifacts[
+                        "normalized_previews"
+                    ],
+                    "playability_report": continuous_artifacts[
+                        "playability_report"
+                    ],
+                }
+            )
+    else:
+        batch["summary"]["continuous_score"] = False
     (output / "manifest.json").write_text(
         json.dumps(batch, ensure_ascii=False, indent=2), encoding="utf-8"
     )

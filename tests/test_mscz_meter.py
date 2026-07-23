@@ -7,11 +7,35 @@ from pathlib import Path
 from rescore.mscz import (
     normalize_mscz_voice_durations,
     remove_leading_empty_vboxes,
+    set_page_layout,
     validate_meter_map_mscz,
 )
 
 
 class MuseScoreMeterTests(unittest.TestCase):
+    def test_sets_a3_landscape_review_layout(self):
+        style = (
+            b'<?xml version="1.0" encoding="UTF-8"?>'
+            b"<museScore><Style><pageWidth>8.27</pageWidth>"
+            b"<pageHeight>11.69</pageHeight>"
+            b"<pagePrintableWidth>7.08</pagePrintableWidth>"
+            b"<spatium>0.725</spatium></Style></museScore>"
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "score.mscz"
+            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("score.mscx", b"<museScore><Score/></museScore>")
+                archive.writestr("score_style.mss", style)
+            report = set_page_layout(path, paper="A3", landscape=True)
+            with zipfile.ZipFile(path) as archive:
+                root = ET.fromstring(archive.read("score_style.mss"))
+                self.assertIsNone(archive.testzip())
+        score_style = root.find("Style")
+        self.assertEqual(score_style.findtext("pageWidth"), "16.54")
+        self.assertEqual(score_style.findtext("pageHeight"), "11.69")
+        self.assertEqual(score_style.findtext("lastSystemFillLimit"), "0.1")
+        self.assertEqual(report["orientation"], "landscape")
+
     def test_removes_empty_cover_frame_before_first_measure(self):
         measure = ET.Element("Measure")
         with tempfile.TemporaryDirectory() as folder:
