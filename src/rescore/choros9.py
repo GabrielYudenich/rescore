@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import statistics
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from fractions import Fraction
@@ -36,6 +37,231 @@ CHOROS9_PART_NAMES = (
     "Violoncelles",
     "Contrebasses",
 )
+
+
+def _fraction_text(value: Fraction) -> str:
+    return (
+        str(value.numerator)
+        if value.denominator == 1
+        else f"{value.numerator}/{value.denominator}"
+    )
+
+
+def _position_groups(events: list[dict]) -> list[list[dict]]:
+    """Collect notes that visually belong to the same chord/onset."""
+    raw_groups: list[list[dict]] = []
+    for event in events:
+        if event.get("chord") and raw_groups:
+            raw_groups[-1].append(event)
+        else:
+            raw_groups.append([event])
+    raw_groups.sort(
+        key=lambda group: min(float(event["default_x"]) for event in group)
+    )
+    merged: list[list[dict]] = []
+    for group in raw_groups:
+        position = statistics.median(float(event["default_x"]) for event in group)
+        if merged:
+            previous = statistics.median(
+                float(event["default_x"]) for event in merged[-1]
+            )
+            if abs(position - previous) <= 6:
+                merged[-1].extend(group)
+                continue
+        merged.append(group)
+    return merged
+
+
+def _estimate_sixteenth_step(streams: list[list[list[dict]]]) -> float | None:
+    """Estimate the horizontal distance of one sixteenth from dense OMR lines."""
+    gaps: list[float] = []
+    for groups in streams:
+        positions = [
+            statistics.median(float(event["default_x"]) for event in group)
+            for group in groups
+        ]
+        for left, right, left_group, right_group in zip(
+            positions, positions[1:], groups, groups[1:]
+        ):
+            types = {
+                event.get("type")
+                for event in (*left_group, *right_group)
+                if event.get("type")
+            }
+            gap = right - left
+            if types & {"16th", "32nd"} and 16 <= gap <= 48:
+                gaps.append(gap)
+    if len(gaps) < 3:
+        return None
+    center = statistics.median(gaps)
+    inliers = [gap for gap in gaps if center * 0.65 <= gap <= center * 1.35]
+    return statistics.median(inliers) if inliers else center
+
+
+def reconstruct_scanned_rhythm(score: dict, meter: str) -> dict:
+    """Recover dense OMR timing from horizontal note positions.
+
+    Audiveris often finds the note heads in a dense scan but assigns a quarter,
+    whole or breve duration to one of the first notes. Its cumulative cursor then
+    pushes the remainder beyond the bar. This pass changes timing only when a
+    stream contains at least five positioned onsets and the page provides a stable
+    sixteenth-note spacing. Sparse/sustained streams and recognized tuplets remain
+    untouched.
+    """
+    beats_text, beat_type_text = meter.split("/", 1)
+    measure_duration = Fraction(int(beats_text) * 4, int(beat_type_text))
+    sixteenth_slots = int(measure_duration * 4)
+    if sixteenth_slots < 1:
+        return {"applied": False, "reason": "fórmula sem subdivisão utilizável"}
+
+    by_measure_stream: dict[
+        tuple[int, str, str, str], list[dict]
+    ] = defaultdict(list)
+    for event in score["events"]:
+        if (
+            event.get("pitch")
+            and not event.get("grace")
+            and event.get("default_x") is not None
+        ):
+            key = (
+                int(event["measure_index"]),
+                event["part_id"],
+                event.get("staff", "1"),
+                event.get("voice", "1"),
+            )
+            by_measure_stream[key].append(event)
+
+    removed_ids: set[int] = set()
+    reconstructed_streams = 0
+    repositioned_events = 0
+    duration_repairs = 0
+    impossible_prefixes_removed = 0
+    removed_prefixes: list[dict] = []
+    thirty_second_streams = 0
+    measure_steps: dict[int, float] = {}
+
+    measure_numbers = sorted({key[0] for key in by_measure_stream})
+    for measure_index in measure_numbers:
+        current = {
+            key: _position_groups(events)
+            for key, events in by_measure_stream.items()
+            if key[0] == measure_index
+        }
+        dense_groups = [groups for groups in current.values() if len(groups) >= 5]
+        step = _estimate_sixteenth_step(dense_groups)
+        if step is None:
+            continue
+        measure_steps[measure_index] = round(step, 3)
+
+        for key, groups in current.items():
+            if len(groups) < 5:
+                continue
+            if any(event.get("tuplet") for group in groups for event in group):
+                continue
+
+            first_duration = max(Fraction(event["duration"]) for event in groups[0])
+            if first_duration >= measure_duration and len(groups) >= 8:
+                for event in groups.pop(0):
+                    removed_ids.add(id(event))
+                    impossible_prefixes_removed += 1
+                    removed_prefixes.append(
+                        {
+                            "part_id": event["part_id"],
+                            "measure": int(event["measure_index"]),
+                            "voice": event.get("voice", "1"),
+                            "pitch": event.get("pitch"),
+                            "duration": event["duration"],
+                            "default_x": event.get("default_x"),
+                            "reason": "duração de compasso inteiro antes de uma linha densa na mesma voz",
+                        }
+                    )
+
+            if len(groups) < 5 or len(groups) > int(measure_duration * 8):
+                continue
+
+            slots_per_quarter = 8 if len(groups) > sixteenth_slots else 4
+            available_slots = int(measure_duration * slots_per_quarter)
+            if slots_per_quarter == 8:
+                thirty_second_streams += 1
+            positions = [
+                statistics.median(float(event["default_x"]) for event in group)
+                for group in groups
+            ]
+            base = positions[0]
+            slots: list[int] = []
+            for position in positions:
+                slot = max(
+                    0,
+                    round(
+                        (position - base)
+                        / step
+                        * Fraction(slots_per_quarter, 4)
+                    ),
+                )
+                if slots:
+                    slot = max(slot, slots[-1] + 1)
+                slots.append(slot)
+            if slots[-1] >= available_slots:
+                span = positions[-1] - positions[0]
+                if span <= 0:
+                    continue
+                slots = [
+                    round((position - positions[0]) / span * (available_slots - 1))
+                    for position in positions
+                ]
+                # Project to a strictly increasing lattice without pushing the
+                # final onset outside the measure. The backward pass reserves
+                # one slot for every remaining recognized onset.
+                for index in range(len(slots) - 2, -1, -1):
+                    slots[index] = min(slots[index], slots[index + 1] - 1)
+                for index in range(len(slots)):
+                    slots[index] = max(slots[index], index)
+                if slots[-1] >= available_slots:
+                    continue
+
+            onsets = [Fraction(slot, slots_per_quarter) for slot in slots]
+            gaps = [
+                right - left for left, right in zip(onsets, onsets[1:]) if right > left
+            ]
+            fallback_duration = (
+                statistics.median(gaps)
+                if gaps
+                else Fraction(1, slots_per_quarter)
+            )
+            for group_index, group in enumerate(groups):
+                onset = onsets[group_index]
+                if group_index + 1 < len(groups):
+                    duration = onsets[group_index + 1] - onset
+                else:
+                    duration = min(fallback_duration, measure_duration - onset)
+                if duration <= 0:
+                    continue
+                for event in group:
+                    if Fraction(event["onset"]) != onset:
+                        repositioned_events += 1
+                    if Fraction(event["duration"]) != duration:
+                        duration_repairs += 1
+                    event["onset"] = _fraction_text(onset)
+                    event["duration"] = _fraction_text(duration)
+            reconstructed_streams += 1
+
+    if removed_ids:
+        score["events"] = [
+            event for event in score["events"] if id(event) not in removed_ids
+        ]
+        score["events_count"] = len(score["events"])
+    return {
+        "applied": bool(reconstructed_streams),
+        "method": "posição horizontal quantizada em semicolcheias ou fusas",
+        "meter": meter,
+        "measure_sixteenth_steps": measure_steps,
+        "reconstructed_streams": reconstructed_streams,
+        "repositioned_events": repositioned_events,
+        "duration_repairs": duration_repairs,
+        "impossible_prefix_events_removed": impossible_prefixes_removed,
+        "removed_prefixes": removed_prefixes,
+        "streams_using_thirty_second_grid": thirty_second_streams,
+    }
 
 
 def _pitch_number(pitch: str | None) -> int | None:

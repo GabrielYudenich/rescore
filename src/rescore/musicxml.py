@@ -172,6 +172,12 @@ def parse_musicxml(path: Path, include_rests: bool = False) -> dict:
                         "part_key": normalize_part_name(part_name),
                         "measure_index": measure_index,
                         "measure_number": measure.get("number", str(measure_index)),
+                        "measure_width": float(measure.get("width"))
+                        if measure.get("width")
+                        else None,
+                        "default_x": float(child.get("default-x"))
+                        if child.get("default-x")
+                        else None,
                         "onset": _fraction_text(onset),
                         "duration": _fraction_text(duration),
                         "pitch": pitch,

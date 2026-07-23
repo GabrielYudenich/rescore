@@ -8,6 +8,7 @@ from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
+from .choros9 import reconstruct_scanned_rhythm
 from .musicxml import _read_musicxml, normalize_part_name, parse_musicxml
 
 
@@ -973,6 +974,11 @@ def build_meter_locked_musicxml(
     """Rebuild an OMR result with every stream clamped and filled to a fixed meter."""
     beats, beat_type, duration = _parse_meter(meter)
     candidate = parse_musicxml(candidate_path)
+    position_reconstruction = (
+        reconstruct_scanned_rhythm(candidate, meter)
+        if score_profile in {"choros9", "choros9-opening"}
+        else None
+    )
     root = ET.fromstring(_read_musicxml(candidate_path))
     tree = ET.ElementTree(root)
     if score_profile == "choros9-opening":
@@ -989,7 +995,12 @@ def build_meter_locked_musicxml(
     for event in candidate["events"]:
         if event.get("pitch"):
             target = aliases.get(event["part_id"], event["part_id"])
-            events_by_part[target].append(_clone_event(event, target))
+            cloned = _clone_event(event, target)
+            if score_profile in {"choros9", "choros9-opening"}:
+                # This orchestral score has no vocal parts. Scan noise and
+                # articulations are frequently exported as lyric syllables.
+                cloned["lyrics"] = []
+            events_by_part[target].append(cloned)
     grouped_tuplet_notes = sum(
         _assign_imported_tuplet_groups(events) for events in events_by_part.values()
     )
@@ -1095,6 +1106,7 @@ def build_meter_locked_musicxml(
         "parts": len(root.findall("part")),
         "measures": candidate["measures"],
         "instrument_profile": profile_name,
+        "position_reconstruction": position_reconstruction,
         "verified_lyrics": verified_lyrics,
         "grouped_tuplet_notes": grouped_tuplet_notes,
         "simplified_incomplete_tuplets": simplified_tuplets,

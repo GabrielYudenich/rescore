@@ -1,11 +1,17 @@
 import tempfile
 import unittest
+from fractions import Fraction
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-from rescore.choros9 import analyze_doublings, audit_measure_structure, merge_measure_candidates
+from rescore.choros9 import (
+    analyze_doublings,
+    audit_measure_structure,
+    merge_measure_candidates,
+    reconstruct_scanned_rhythm,
+)
 from rescore.musicxml import parse_musicxml
 from rescore.scan import reinforce_orchestral_barlines
 
@@ -27,6 +33,168 @@ def _score(pitch: str) -> str:
 
 
 class Choros9Tests(unittest.TestCase):
+    def test_reconstructs_dense_scan_from_horizontal_positions(self):
+        events = []
+        for index in range(16):
+            events.append(
+                {
+                    "part_id": "P1",
+                    "measure_index": 1,
+                    "onset": str(index),
+                    "duration": "1",
+                    "pitch": f"C{4 + index % 2}",
+                    "voice": "1",
+                    "staff": "1",
+                    "type": "16th",
+                    "chord": False,
+                    "grace": False,
+                    "tuplet": None,
+                    "default_x": 100.0 + index * 30.0,
+                }
+            )
+        score = {
+            "parts": [{"id": "P1", "name": "Piccolo"}],
+            "measures": 1,
+            "events": events,
+            "events_count": len(events),
+        }
+        report = reconstruct_scanned_rhythm(score, "4/4")
+        self.assertTrue(report["applied"])
+        self.assertEqual(len(score["events"]), 16)
+        self.assertEqual(
+            [event["onset"] for event in score["events"]],
+            [str(Fraction(index, 4)) for index in range(16)],
+        )
+        self.assertTrue(all(event["duration"] == "1/4" for event in score["events"]))
+
+    def test_keeps_sparse_and_tuplet_streams_unchanged(self):
+        sparse = {
+            "part_id": "P1",
+            "measure_index": 1,
+            "onset": "0",
+            "duration": "4",
+            "pitch": "C3",
+            "voice": "1",
+            "staff": "1",
+            "type": "whole",
+            "chord": False,
+            "grace": False,
+            "tuplet": None,
+            "default_x": 80.0,
+        }
+        tuplets = [
+            {
+                **sparse,
+                "part_id": "P2",
+                "onset": str(index),
+                "duration": "1/3",
+                "pitch": "D4",
+                "type": "eighth",
+                "tuplet": {"actual": "3", "normal": "2"},
+                "default_x": 100.0 + index * 30.0,
+            }
+            for index in range(6)
+        ]
+        score = {
+            "parts": [{"id": "P1", "name": "Basson"}, {"id": "P2", "name": "Célesta"}],
+            "measures": 1,
+            "events": [sparse, *tuplets],
+            "events_count": 7,
+        }
+        before = [(event["onset"], event["duration"]) for event in score["events"]]
+        reconstruct_scanned_rhythm(score, "4/4")
+        after = [(event["onset"], event["duration"]) for event in score["events"]]
+        self.assertEqual(after, before)
+
+    def test_fits_irregular_dense_positions_without_losing_the_last_note(self):
+        positions = (63, 98, 121, 155, 182, 213, 274, 310, 342, 373, 398, 435, 469, 487, 497, 529)
+        events = [
+            {
+                "part_id": "P1",
+                "measure_index": 1,
+                "onset": str(index),
+                "duration": "1",
+                "pitch": "C5",
+                "voice": "1",
+                "staff": "1",
+                "type": "16th",
+                "chord": False,
+                "grace": False,
+                "tuplet": None,
+                "default_x": float(position),
+            }
+            for index, position in enumerate(positions)
+        ]
+        score = {
+            "parts": [{"id": "P1", "name": "Violons II"}],
+            "measures": 1,
+            "events": events,
+            "events_count": len(events),
+        }
+        reconstruct_scanned_rhythm(score, "4/4")
+        self.assertEqual(len(score["events"]), 16)
+        self.assertEqual(score["events"][-1]["onset"], "15/4")
+        self.assertEqual(score["events"][-1]["duration"], "1/4")
+
+    def test_removes_only_impossible_whole_prefix_before_dense_voice(self):
+        positions = (60, 100, 130, 160, 190, 220, 250, 280, 310)
+        events = [
+            {
+                "part_id": "P1",
+                "measure_index": 1,
+                "onset": str(index),
+                "duration": "4" if index == 0 else "1/4",
+                "pitch": "C4" if index == 0 else "C6",
+                "voice": "1",
+                "staff": "1",
+                "type": "whole" if index == 0 else "16th",
+                "chord": False,
+                "grace": False,
+                "tuplet": None,
+                "default_x": float(position),
+            }
+            for index, position in enumerate(positions)
+        ]
+        score = {
+            "parts": [{"id": "P1", "name": "Piccolo"}],
+            "measures": 1,
+            "events": events,
+            "events_count": len(events),
+        }
+        report = reconstruct_scanned_rhythm(score, "4/4")
+        self.assertEqual(report["impossible_prefix_events_removed"], 1)
+        self.assertEqual([event["pitch"] for event in score["events"]], ["C6"] * 8)
+
+    def test_preserves_more_than_sixteen_recognized_onsets_on_finer_grid(self):
+        events = [
+            {
+                "part_id": "P1",
+                "measure_index": 1,
+                "onset": str(index),
+                "duration": "1/4",
+                "pitch": "D5",
+                "voice": "1",
+                "staff": "1",
+                "type": "16th",
+                "chord": False,
+                "grace": False,
+                "tuplet": None,
+                "default_x": 80.0 + index * 24.0,
+            }
+            for index in range(18)
+        ]
+        score = {
+            "parts": [{"id": "P1", "name": "2 Hautbois"}],
+            "measures": 1,
+            "events": events,
+            "events_count": len(events),
+        }
+        report = reconstruct_scanned_rhythm(score, "4/4")
+        self.assertEqual(len(score["events"]), 18)
+        self.assertEqual(report["impossible_prefix_events_removed"], 0)
+        self.assertEqual(report["streams_using_thirty_second_grid"], 1)
+        self.assertLess(Fraction(score["events"][-1]["onset"]), 4)
+
     def test_reports_safe_transposed_doubling_and_meter_audit(self):
         score = {
             "parts": [

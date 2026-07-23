@@ -13,6 +13,8 @@ errar alturas, acidentes, vozes, quiálteras, letras e a associação entre paut
 
 - processamento de uma página, intervalos ou listas como `3-10,15`;
 - fluxo próprio para PDF digital e para grade escaneada;
+- reconstrução conservadora de linhas rápidas pela posição horizontal registrada
+  pelo OMR, quando as durações reconhecidas empurrariam notas para fora do compasso;
 - exportação para MusicXML, `.mscz` e PDF de conferência;
 - preservação do projeto `.omr` para correções no Audiveris;
 - associação e normalização de pautas orquestrais;

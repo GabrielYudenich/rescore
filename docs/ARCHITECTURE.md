@@ -48,11 +48,20 @@ Uma página escaneada passa por tentativas adicionais:
 3. OMR da página completa;
 4. se necessário, isolamento dos compassos detectados;
 5. nova tentativa ampliada por compasso;
-6. reunião dos candidatos em um único MusicXML.
+6. reunião dos candidatos em um único MusicXML;
+7. reconstrução posicional de linhas densas cuja soma de durações excede o compasso.
 
 O recorte por compasso reduz a quantidade de linhas concorrentes que o reconhecedor
 precisa interpretar. Ele não inventa a posição de uma barra: uma separação só é
 usada quando a estrutura visual oferece evidência suficiente.
+
+O MusicXML do Audiveris preserva a coordenada horizontal de cada cabeça de nota.
+Quando uma linha rápida possui espaçamento visual regular, mas uma duração
+evidentemente impossível desloca as notas seguintes, o perfil escaneado quantiza
+essas coordenadas em uma grade de semicolcheias ou fusas. Alturas não são criadas.
+Linhas sustentadas e quiálteras reconhecidas ficam fora desse ajuste. O relatório de
+normalização registra quantos eventos foram reposicionados e qualquer símbolo
+impossível descartado.
 
 ## Normalização métrica
 
