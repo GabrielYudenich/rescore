@@ -400,6 +400,10 @@ def validate_dataset(root: Path, *, verify_hashes: bool = True) -> dict[str, Any
                 file_records.append(alignment[name])
         file_records.extend(alignment.get("preview_images", []))
         file_records.extend(alignment.get("staff_preview_images", []))
+        training = item.get("training", {})
+        for name in ("index", "summary"):
+            if isinstance(training.get(name), dict):
+                file_records.append(training[name])
         for record in file_records:
             relative = record.get("path", "")
             try:

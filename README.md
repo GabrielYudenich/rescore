@@ -125,6 +125,8 @@ rescore dataset-align data/meu-conjunto --id meu-item --page-measures 8,8
 rescore alignment-validate data/meu-conjunto/items/meu-item/alignment/measure-regions.json
 rescore dataset-align-staffs data/meu-conjunto --id meu-item --profile auto
 rescore staff-alignment-validate data/meu-conjunto/items/meu-item/alignment/staff-regions.json
+rescore dataset-export-training data/meu-conjunto --id meu-item
+rescore training-export-validate data/meu-conjunto/items/meu-item/training/samples.jsonl
 ```
 
 Use `rescore --help` ou `rescore <comando> --help` para ver todos os argumentos.

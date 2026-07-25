@@ -124,6 +124,35 @@ O arquivo `staff-regions.json` continua com `review_status=machine-proposed`.
 Os nomes e alvos são hipóteses estruturais do perfil e precisam ser conferidos
 no `staff-review.html`; eles ainda não são anotações musicais aprovadas.
 
+## Exportar exemplos de treino
+
+Depois das duas etapas de alinhamento, o exportador gera uma imagem PNG sem perdas
+para cada célula `compasso × pauta` e associa os eventos MusicXML correspondentes:
+
+```powershell
+rescore dataset-export-training data/rescore-local `
+  --id exemplo-pagina-1
+
+rescore training-export-validate `
+  data/rescore-local/items/exemplo-pagina-1/training/samples.jsonl
+```
+
+O `samples.jsonl` conserva simultaneamente eventos estruturados e uma sequência
+determinística de tokens. A versão inicial inclui alturas, pausas, posição rítmica,
+duração, voz, tipo, pontos, acordes, notas de adorno, quiálteras, ligaduras de
+duração, articulações, tremolos e letras Unicode por caractere. Relações possíveis:
+
+- `single-target`: uma pauta visual e uma pauta MusicXML;
+- `equivalent-targets`: vários músicos possuem conteúdo idêntico;
+- `multi-target`: a pauta condensada aponta para fluxos diferentes;
+- `unassigned`: papel pautado vazio, sem instrumento atribuído;
+- `missing-target-events`: o alvo não contém eventos suficientes para uso seguro.
+
+Gerar o arquivo não autoriza treino. `training_eligible` somente se torna verdadeiro
+quando o gabarito é humano e os alinhamentos de compassos e pautas estão marcados
+como `human-reviewed`. Os demais exemplos continuam úteis para a fila de revisão,
+mas não entram silenciosamente no modelo.
+
 ## Campos importantes
 
 - `source_type`: `printed`, `handwritten` ou `mixed`;
@@ -137,6 +166,8 @@ no `staff-review.html`; eles ainda não são anotações musicais aprovadas.
 - `alignment.review_status`: proposta da máquina ou revisão humana;
 - `alignment.regions_file`: caixas de compassos e métricas geométricas;
 - `alignment.staff_regions_file`: pautas, alvos MusicXML e células compasso × pauta;
+- `training.index`: índice JSONL dos recortes e alvos supervisionados;
+- `training.eligible_sample_count`: quantidade liberada pela política de revisão;
 - `verification`: quanto da transcrição foi revisado;
 - `writer`: copista ou mão, quando conhecida;
 - `checksums`: integridade dos arquivos.

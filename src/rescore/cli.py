@@ -20,6 +20,7 @@ from .pdf import pdf_info, render_pages
 from .pipeline import convert
 from .staff_alignment import align_dataset_staffs, validate_staff_alignment
 from .tooling import doctor
+from .training_export import export_training_samples, validate_training_export
 
 
 def _json(data: object) -> None:
@@ -195,6 +196,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="valida pautas e células de um staff-regions.json",
     )
     staff_alignment_validate.add_argument("path", type=Path)
+
+    dataset_export_training = subparsers.add_parser(
+        "dataset-export-training",
+        help="exporta recortes compasso × pauta e alvos MusicXML determinísticos",
+    )
+    dataset_export_training.add_argument("path", type=Path)
+    dataset_export_training.add_argument("--id", required=True, dest="item_id")
+    dataset_export_training.add_argument("--force", action="store_true")
+
+    training_export_validate = subparsers.add_parser(
+        "training-export-validate",
+        help="valida imagens, tokens e checksums de um samples.jsonl",
+    )
+    training_export_validate.add_argument("path", type=Path)
+    training_export_validate.add_argument("--skip-hashes", action="store_true")
     return parser
 
 
@@ -296,6 +312,14 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "staff-alignment-validate":
             result = validate_staff_alignment(args.path)
+        elif args.command == "dataset-export-training":
+            result = export_training_samples(
+                args.path,
+                item_id=args.item_id,
+                force=args.force,
+            )
+        elif args.command == "training-export-validate":
+            result = validate_training_export(args.path, verify_hashes=not args.skip_hashes)
         else:
             parser.error(f"comando desconhecido: {args.command}")
             return 2

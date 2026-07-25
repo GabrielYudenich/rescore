@@ -36,6 +36,8 @@ PDF
 - `alignment.py`: detecta barras, propõe regiões de compassos e gera revisão visual;
 - `staff_alignment.py`: detecta a extensão do sistema, divide pautas físicas e
   associa perfis condensados às partes MusicXML sem reconhecer notas;
+- `training_export.py`: recorta células compasso × pauta, serializa alvos MusicXML
+  e impede que propostas não revisadas sejam usadas como verdade de treino;
 - `tooling.py`: localiza Audiveris e MuseScore.
 
 ## Alinhamento supervisionado
@@ -56,6 +58,11 @@ estima o espaçamento entre as cinco linhas e cria bandas sem depender da densid
 das notas. Perfis explícitos representam instrumentos condensados com vários
 alvos, pautas de teclado por número e linhas de percussão de uma linha. A grade
 resultante contém uma célula normalizada para cada `compasso × pauta`.
+
+O exportador supervisionado usa essa grade sem redimensionar ou recomprimir a
+fonte: cada célula vira PNG e recebe eventos/tokens determinísticos. Pautas
+condensadas preservam todos os fluxos de destino; alvos equivalentes são
+identificados por hash, mas não são apagados. Checksums cobrem imagem e alvo.
 
 ## PDF digital
 
