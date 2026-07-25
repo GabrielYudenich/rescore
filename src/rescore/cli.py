@@ -5,6 +5,13 @@ import json
 import sys
 from pathlib import Path
 
+from .dataset import (
+    add_pair,
+    initialize_dataset,
+    validate_dataset,
+    write_public_catalog,
+)
+from .hardware import inspect_hardware
 from .mscz import inspect_mscz
 from .musicxml import compare_scores, parse_musicxml, write_canonical
 from .normalize import build_normalized_musicxml
@@ -26,6 +33,10 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("doctor", help="verifica as ferramentas externas")
+    subparsers.add_parser(
+        "hardware",
+        help="mostra RAM, GPU, VRAM e capacidade aproximada de treinamento",
+    )
 
     inspect_parser = subparsers.add_parser("inspect-mscz", help="inspeciona um arquivo .mscz")
     inspect_parser.add_argument("path", type=Path)
@@ -71,6 +82,80 @@ def build_parser() -> argparse.ArgumentParser:
     convert_parser.add_argument(
         "--force", action="store_true", help="refaz o OMR mesmo quando já existe um .mxl"
     )
+
+    dataset_init = subparsers.add_parser(
+        "dataset-init",
+        help="cria um dataset local versionado para treinamento",
+    )
+    dataset_init.add_argument("path", type=Path)
+    dataset_init.add_argument("--id", required=True, dest="dataset_id")
+    dataset_init.add_argument("--name", required=True)
+    dataset_init.add_argument(
+        "--annotation-license",
+        default="CC-BY-4.0",
+        help="licença padrão das transcrições e correções",
+    )
+
+    dataset_add = subparsers.add_parser(
+        "dataset-add",
+        help="adiciona imagens e um gabarito MSCZ/MusicXML ao dataset",
+    )
+    dataset_add.add_argument("path", type=Path)
+    dataset_add.add_argument("--id", required=True, dest="item_id")
+    dataset_add.add_argument("--images", type=Path, nargs="+", required=True)
+    dataset_add.add_argument("--score", type=Path, required=True)
+    dataset_add.add_argument("--composer", required=True)
+    dataset_add.add_argument("--work", required=True)
+    dataset_add.add_argument(
+        "--source-type",
+        choices=("printed", "handwritten", "mixed"),
+        required=True,
+    )
+    dataset_add.add_argument(
+        "--visibility",
+        choices=("public", "private"),
+        required=True,
+    )
+    dataset_add.add_argument("--rights-status", required=True)
+    dataset_add.add_argument("--source-license", required=True)
+    dataset_add.add_argument(
+        "--redistributable",
+        action="store_true",
+        help="confirma que a fonte pode ser redistribuída",
+    )
+    dataset_add.add_argument("--measure-start", type=int, required=True)
+    dataset_add.add_argument("--measure-end", type=int, required=True)
+    dataset_add.add_argument(
+        "--verification",
+        choices=(
+            "human-transcribed",
+            "human-reviewed",
+            "partially-reviewed",
+            "machine-generated",
+        ),
+        required=True,
+    )
+    dataset_add.add_argument(
+        "--alignment-status",
+        choices=("verified", "inferred", "unassigned"),
+        default="unassigned",
+    )
+    dataset_add.add_argument("--writer", default="")
+    dataset_add.add_argument("--notes", default="")
+
+    dataset_validate = subparsers.add_parser(
+        "dataset-validate",
+        help="valida proveniência, privacidade, arquivos e checksums",
+    )
+    dataset_validate.add_argument("path", type=Path)
+    dataset_validate.add_argument("--skip-hashes", action="store_true")
+
+    dataset_catalog = subparsers.add_parser(
+        "dataset-public-catalog",
+        help="gera catálogo contendo somente itens públicos",
+    )
+    dataset_catalog.add_argument("path", type=Path)
+    dataset_catalog.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -85,6 +170,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "doctor":
             result = doctor(project_root)
+        elif args.command == "hardware":
+            result = inspect_hardware(project_root)
         elif args.command == "inspect-mscz":
             result = inspect_mscz(args.path)
         elif args.command == "render":
@@ -120,10 +207,42 @@ def main(argv: list[str] | None = None) -> int:
                 args.omr_dpi,
                 args.meter,
             )
+        elif args.command == "dataset-init":
+            result = initialize_dataset(
+                args.path,
+                dataset_id=args.dataset_id,
+                name=args.name,
+                default_annotation_license=args.annotation_license,
+            )
+        elif args.command == "dataset-add":
+            result = add_pair(
+                project_root,
+                args.path,
+                item_id=args.item_id,
+                images=args.images,
+                score=args.score,
+                composer=args.composer,
+                work=args.work,
+                source_type=args.source_type,
+                visibility=args.visibility,
+                rights_status=args.rights_status,
+                source_license=args.source_license,
+                redistributable=args.redistributable,
+                measure_start=args.measure_start,
+                measure_end=args.measure_end,
+                verification=args.verification,
+                alignment_status=args.alignment_status,
+                writer=args.writer,
+                notes=args.notes,
+            )
+        elif args.command == "dataset-validate":
+            result = validate_dataset(args.path, verify_hashes=not args.skip_hashes)
+        elif args.command == "dataset-public-catalog":
+            result = write_public_catalog(args.path, args.output)
         else:
             parser.error(f"comando desconhecido: {args.command}")
             return 2
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - CLI boundary reports friendly errors.
         print(f"erro: {exc}", file=sys.stderr)
         return 1
     _json(result)
