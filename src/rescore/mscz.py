@@ -183,7 +183,7 @@ def set_page_layout(
         "spatium": spatium_mm,
         # Justify even sparse review systems. Without this MuseScore may leave
         # three recognized measures occupying only a quarter of an A3 sheet.
-        "lastSystemFillLimit": 0.1,
+        "lastSystemFillLimit": 0.0,
     }
     for name, value in values.items():
         node = style.find(name)

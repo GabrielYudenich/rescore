@@ -33,7 +33,7 @@ class MuseScoreMeterTests(unittest.TestCase):
         score_style = root.find("Style")
         self.assertEqual(score_style.findtext("pageWidth"), "16.54")
         self.assertEqual(score_style.findtext("pageHeight"), "11.69")
-        self.assertEqual(score_style.findtext("lastSystemFillLimit"), "0.1")
+        self.assertEqual(score_style.findtext("lastSystemFillLimit"), "0")
         self.assertEqual(report["orientation"], "landscape")
 
     def test_removes_empty_cover_frame_before_first_measure(self):
@@ -84,9 +84,7 @@ class MuseScoreMeterTests(unittest.TestCase):
         if spacer:
             ET.SubElement(final_rest, "visible").text = "0"
             ET.SubElement(final_rest, "dots").text = "2"
-        ET.SubElement(final_rest, "durationType").text = (
-            "quarter" if not spacer else "quarter"
-        )
+        ET.SubElement(final_rest, "durationType").text = "quarter"
         return measure
 
     def test_validator_does_not_treat_location_as_duration(self):

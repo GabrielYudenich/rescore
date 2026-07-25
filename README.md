@@ -154,6 +154,39 @@ distribuídos entre os executantes disponíveis; alturas excedentes e ambíguas 
 são escondidas, mas registradas em `playability-report.json`. Cordas, tímpanos,
 celesta e harpa preservam sua escrita polifônica.
 
+## Manuscrito em imagens: A Menina das Nuvens
+
+Há um perfil experimental específico para as quatro primeiras fotos de
+**A Menina das Nuvens — 1º Ato**. Ele lê cada página em dois recortes verticais,
+monta as páginas em uma única sequência e sempre entrega MusicXML, MuseScore e
+PDF A3 horizontal.
+
+O perfil usa o [homr](https://github.com/liebharc/homr) em um ambiente separado:
+
+```powershell
+py -3.11 -m venv tools/homr-env
+.\tools\homr-env\Scripts\python.exe -m pip install homr==0.7.0
+```
+
+Para processar a pasta com exatamente quatro imagens:
+
+```powershell
+python scripts/build_menina_draft.py "pasta-das-quatro-fotos" `
+  --homr tools/homr-env/Scripts/homr.exe `
+  --output output/menina-das-nuvens
+```
+
+O resultado possui 23 partes e 26 compassos contínuos: 2/4 nos compassos 1–18,
+3/4 nos compassos 19–21 e novamente 2/4 nos compassos 22–26. O reconhecedor
+completa cada voz somente com pausas, nunca aumentando o compasso para acomodar
+um resultado impossível. Alturas fora da tessitura e compassos excessivamente
+densos são descartados e registrados em `recognition-report.json`.
+
+Esse perfil é deliberadamente conservador e não deve ser tratado como um leitor
+genérico de qualquer manuscrito. Os grupos manuscritos de 12 do compasso 22 ainda
+ficam em branco quando a razão rítmica não pode ser comprovada. Articulações,
+dinâmicas, ligaduras, transposição e letras precisam de revisão humana.
+
 ## Arquivos produzidos
 
 Uma conversão pode gerar:
