@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from rescore.manuscript import recognize_menina_image_directory
-from rescore.mscz import set_page_layout
+from rescore.mscz import set_page_layout, validate_meter_map_mscz
 from rescore.pipeline import convert_with_musescore
 from rescore.tooling import find_musescore
 
@@ -60,6 +60,20 @@ def main(argv: list[str] | None = None) -> int:
         margin_inches=0.35,
         spatium_mm=0.52,
     )
+    validation = validate_meter_map_mscz(
+        mscz,
+        {1: (2, 4), 19: (3, 4), 22: (2, 4)},
+        26,
+    )
+    validation_path = output / "musescore-validation.json"
+    validation_path.write_text(
+        json.dumps(validation, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    if not validation["valid"]:
+        raise RuntimeError(
+            "o MuseScore alterou a duração de uma ou mais vozes; "
+            f"consulte {validation_path}"
+        )
     pdf = output / "menina-das-nuvens-draft-A3.pdf"
     convert_with_musescore(
         musescore,
@@ -74,6 +88,7 @@ def main(argv: list[str] | None = None) -> int:
             "musescore": str(mscz.resolve()),
             "pdf": str(pdf.resolve()),
             "report": str(result["report"].resolve()),
+            "validation": str(validation_path.resolve()),
         },
         "layout": layout,
         "summary": result["summary"],

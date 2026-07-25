@@ -181,6 +181,9 @@ O resultado possui 23 partes e 26 compassos contínuos: 2/4 nos compassos 1–18
 completa cada voz somente com pausas, nunca aumentando o compasso para acomodar
 um resultado impossível. Alturas fora da tessitura e compassos excessivamente
 densos são descartados e registrados em `recognition-report.json`.
+Depois da importação, o próprio `.mscz` é auditado em
+`musescore-validation.json`; a execução é interrompida se qualquer voz ficar
+curta ou longa.
 
 Esse perfil é deliberadamente conservador e não deve ser tratado como um leitor
 genérico de qualquer manuscrito. Os grupos manuscritos de 12 do compasso 22 ainda

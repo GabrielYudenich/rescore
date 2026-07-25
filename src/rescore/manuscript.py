@@ -16,6 +16,19 @@ from PIL import Image, ImageEnhance, ImageOps
 from .musicxml import parse_musicxml
 
 DIVISIONS = 24
+RHYTHMIC_GRID = Fraction(1, 8)
+NOTATED_DURATIONS = (
+    Fraction(4),
+    Fraction(3),
+    Fraction(2),
+    Fraction(3, 2),
+    Fraction(1),
+    Fraction(3, 4),
+    Fraction(1, 2),
+    Fraction(3, 8),
+    Fraction(1, 4),
+    Fraction(1, 8),
+)
 
 
 @dataclass(frozen=True)
@@ -257,7 +270,15 @@ def _source_measure_buckets(
 
 
 def _quantize(value: Fraction) -> Fraction:
-    return Fraction(round(float(value * DIVISIONS)), DIVISIONS)
+    """Snap uncertain OMR timing to the smallest safely notated value.
+
+    homr can return proportional positions that are metrically exact in
+    MusicXML but have no corresponding written duration. MuseScore then
+    approximates those values with 128th-note fractions and reports incomplete
+    measures. A 32nd-note grid retains the useful horizontal order while every
+    emitted note and rest has an unambiguous native spelling.
+    """
+    return round(value / RHYTHMIC_GRID) * RHYTHMIC_GRID
 
 
 def _sanitize_groups(
@@ -386,22 +407,7 @@ def _duration_type(duration: Fraction) -> tuple[str | None, int]:
 
 
 def _emit_rest(measure: ET.Element, duration: Fraction, voice: str, staff: str) -> None:
-    remaining = duration
-    pieces = (
-        Fraction(4),
-        Fraction(3),
-        Fraction(2),
-        Fraction(3, 2),
-        Fraction(1),
-        Fraction(3, 4),
-        Fraction(1, 2),
-        Fraction(3, 8),
-        Fraction(1, 4),
-        Fraction(1, 8),
-        Fraction(1, 24),
-    )
-    while remaining > 0:
-        piece = next((candidate for candidate in pieces if candidate <= remaining), remaining)
+    for piece in _duration_pieces(duration):
         note = ET.SubElement(measure, "note")
         ET.SubElement(note, "rest")
         ET.SubElement(note, "duration").text = str(int(piece * DIVISIONS))
@@ -412,7 +418,22 @@ def _emit_rest(measure: ET.Element, duration: Fraction, voice: str, staff: str) 
             for _ in range(dots):
                 ET.SubElement(note, "dot")
         ET.SubElement(note, "staff").text = staff
+
+
+def _duration_pieces(duration: Fraction) -> list[Fraction]:
+    """Spell a duration as tied/rest pieces MuseScore represents exactly."""
+    remaining = duration
+    pieces: list[Fraction] = []
+    while remaining > 0:
+        piece = next(
+            (candidate for candidate in NOTATED_DURATIONS if candidate <= remaining),
+            None,
+        )
+        if piece is None:
+            raise ValueError(f"duração fora da grade notacional: {remaining}")
+        pieces.append(piece)
         remaining -= piece
+    return pieces
 
 
 def _pitch_components(pitch: str) -> tuple[str, int, int]:
@@ -434,6 +455,8 @@ def _emit_note(
     *,
     chord: bool,
     lyric: str | None,
+    tie_start: bool = False,
+    tie_stop: bool = False,
 ) -> None:
     note = ET.SubElement(measure, "note")
     if chord:
@@ -453,6 +476,10 @@ def _emit_note(
     else:
         ET.SubElement(note, "rest")
     ET.SubElement(note, "duration").text = str(int(duration * DIVISIONS))
+    if tie_stop:
+        ET.SubElement(note, "tie", {"type": "stop"})
+    if tie_start:
+        ET.SubElement(note, "tie", {"type": "start"})
     ET.SubElement(note, "voice").text = voice
     note_type, dots = _duration_type(duration)
     if note_type:
@@ -460,6 +487,12 @@ def _emit_note(
         for _ in range(dots):
             ET.SubElement(note, "dot")
     ET.SubElement(note, "staff").text = staff
+    if tie_start or tie_stop:
+        notations = ET.SubElement(note, "notations")
+        if tie_stop:
+            ET.SubElement(notations, "tied", {"type": "stop"})
+        if tie_start:
+            ET.SubElement(notations, "tied", {"type": "start"})
     if lyric and not chord:
         lyric_node = ET.SubElement(note, "lyric", {"number": "1"})
         ET.SubElement(lyric_node, "syllabic").text = "single"
@@ -608,21 +641,27 @@ def build_menina_das_nuvens_draft(
                 for onset, note_duration, group in groups:
                     if onset > cursor:
                         _emit_rest(measure, onset - cursor, "1", staff)
-                    for chord_index, event in enumerate(group):
-                        lyric = (
-                            lyrics[lyric_index]
-                            if chord_index == 0 and lyric_index < len(lyrics)
-                            else None
-                        )
-                        _emit_note(
-                            measure,
-                            event,
-                            note_duration,
-                            "1",
-                            staff,
-                            chord=chord_index > 0,
-                            lyric=lyric,
-                        )
+                    pieces = _duration_pieces(note_duration)
+                    for piece_index, piece in enumerate(pieces):
+                        for chord_index, event in enumerate(group):
+                            lyric = (
+                                lyrics[lyric_index]
+                                if piece_index == 0
+                                and chord_index == 0
+                                and lyric_index < len(lyrics)
+                                else None
+                            )
+                            _emit_note(
+                                measure,
+                                event,
+                                piece,
+                                "1",
+                                staff,
+                                chord=chord_index > 0,
+                                lyric=lyric,
+                                tie_start=piece_index < len(pieces) - 1,
+                                tie_stop=piece_index > 0,
+                            )
                     if lyric_index < len(lyrics):
                         lyric_index += 1
                     cursor = onset + note_duration

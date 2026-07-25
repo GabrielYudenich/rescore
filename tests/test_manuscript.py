@@ -5,7 +5,11 @@ from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
-from rescore.manuscript import build_menina_das_nuvens_draft
+from rescore.manuscript import (
+    _duration_pieces,
+    _quantize,
+    build_menina_das_nuvens_draft,
+)
 from rescore.musicxml import parse_musicxml
 
 
@@ -66,3 +70,13 @@ def test_menina_draft_has_fixed_continuous_meter(tmp_path: Path) -> None:
     assert lengths
     for (_part, measure, _staff), duration in lengths.items():
         assert duration == (Fraction(3) if 19 <= measure <= 21 else Fraction(2))
+
+
+def test_manuscript_timing_uses_native_32nd_note_grid() -> None:
+    assert _quantize(Fraction(7, 24)) == Fraction(1, 4)
+    assert _quantize(Fraction(11, 24)) == Fraction(1, 2)
+    assert _quantize(Fraction(23, 24)) == Fraction(1)
+    assert _duration_pieces(Fraction(11, 8)) == [
+        Fraction(1),
+        Fraction(3, 8),
+    ]
