@@ -256,6 +256,35 @@
               ],
               "minItems": 2,
               "maxItems": 2
+            },
+            "review_status": {
+              "enum": [
+                "machine-proposed",
+                "human-reviewed"
+              ]
+            },
+            "page_measure_counts": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "measure_region_count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "regions_file": {
+              "$ref": "#/$defs/file"
+            },
+            "review_html": {
+              "$ref": "#/$defs/file"
+            },
+            "preview_images": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/file"
+              }
             }
           }
         },

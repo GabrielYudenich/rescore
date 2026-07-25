@@ -32,7 +32,22 @@ PDF
 - `normalize.py`: regras de estrutura, vozes, métricas, claves e instrumentos;
 - `choros9.py`: perfil experimental para grades orquestrais escaneadas;
 - `mscz.py`: inspeciona e valida a estrutura interna do arquivo MuseScore;
+- `dataset.py`: importa pares supervisionados e impede vazamento de itens privados;
+- `alignment.py`: detecta barras, propõe regiões de compassos e gera revisão visual;
 - `tooling.py`: localiza Audiveris e MuseScore.
+
+## Alinhamento supervisionado
+
+O alinhador trabalha sobre o número de compassos confirmado no manifesto. Ele não
+infere a quantidade pela densidade de notas. Linhas verticais são detectadas em uma
+cópia reduzida, agrupadas e avaliadas por suporte, regularidade e cobertura da
+página. As coordenadas selecionadas são convertidas de volta para a resolução
+original.
+
+Cada região recebe número de compasso, caixa em pixels e caixa normalizada. Uma
+imagem transparente de sobreposição e um HTML local permitem verificar a proposta.
+O estado inicial é sempre `machine-proposed`; passar nas verificações geométricas
+não equivale a revisão musical humana.
 
 ## PDF digital
 

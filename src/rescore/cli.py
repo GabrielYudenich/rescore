@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from .alignment import align_dataset_item, validate_alignment
 from .dataset import (
     add_pair,
     initialize_dataset,
@@ -156,6 +157,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dataset_catalog.add_argument("path", type=Path)
     dataset_catalog.add_argument("--output", type=Path, required=True)
+
+    dataset_align = subparsers.add_parser(
+        "dataset-align",
+        help="propõe regiões de compassos nas imagens de um item",
+    )
+    dataset_align.add_argument("path", type=Path)
+    dataset_align.add_argument("--id", required=True, dest="item_id")
+    dataset_align.add_argument(
+        "--page-measures",
+        help="compassos por imagem, por exemplo 8,8",
+    )
+    dataset_align.add_argument("--force", action="store_true")
+
+    alignment_validate = subparsers.add_parser(
+        "alignment-validate",
+        help="valida cobertura e caixas de um measure-regions.json",
+    )
+    alignment_validate.add_argument("path", type=Path)
     return parser
 
 
@@ -239,6 +258,15 @@ def main(argv: list[str] | None = None) -> int:
             result = validate_dataset(args.path, verify_hashes=not args.skip_hashes)
         elif args.command == "dataset-public-catalog":
             result = write_public_catalog(args.path, args.output)
+        elif args.command == "dataset-align":
+            result = align_dataset_item(
+                args.path,
+                item_id=args.item_id,
+                page_measures=args.page_measures,
+                force=args.force,
+            )
+        elif args.command == "alignment-validate":
+            result = validate_alignment(args.path)
         else:
             parser.error(f"comando desconhecido: {args.command}")
             return 2

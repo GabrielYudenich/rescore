@@ -91,11 +91,18 @@ Assim o esforço humano melhora diretamente as versões seguintes.
 
 ### Fase 1 — alinhador
 
+- localizar barras e compassos da fonte em alta resolução;
+- propor correspondências numeradas e coordenadas normalizadas;
+- gerar sobreposições e uma página local de revisão;
 - renderizar MusicXML revisado de volta para imagem;
-- localizar sistemas, pautas e compassos dos dois lados;
-- propor correspondências;
+- localizar pautas da fonte e da referência;
 - editor simples para confirmar ou corrigir;
 - exportar recortes pareados.
+
+O primeiro incremento desta fase já existe no comando `dataset-align`: ele cobre
+alinhamento página-compasso, valida a sequência e mantém a proposta separada de uma
+confirmação humana. O próximo incremento é subdividir cada compasso por pauta e
+associá-lo à parte MusicXML correspondente.
 
 ### Fase 2 — modelo-base por pauta
 

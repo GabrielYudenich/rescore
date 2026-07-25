@@ -25,6 +25,10 @@ data/meu-conjunto/
       annotation/
         ground-truth.musicxml
         source.mscz
+      alignment/
+        measure-regions.json
+        page-0001-overlay.jpg
+        review.html
   public-catalog.json
 ```
 
@@ -61,6 +65,38 @@ rescore dataset-public-catalog data/rescore-local `
 Ao receber MSCZ ou MXL, o importador conserva a fonte e pede ao MuseScore uma cópia
 MusicXML. O arquivo editável nunca substitui a referência original.
 
+## Alinhar compassos
+
+Depois de importar o par, o alinhador pode propor caixas para cada compasso:
+
+```powershell
+rescore dataset-align data/rescore-local `
+  --id exemplo-pagina-1 `
+  --page-measures 8,8
+```
+
+`--page-measures` informa quantos compassos verificados existem em cada imagem.
+Quando a divisão é uniforme, o argumento pode ser omitido. O alinhador:
+
+- reduz temporariamente a página para detectar geometria sem perder o original;
+- localiza segmentos verticais longos;
+- agrupa linhas coincidentes;
+- escolhe uma sequência estrutural compatível com a contagem declarada;
+- grava caixas em pixels e coordenadas normalizadas;
+- produz imagens com numeração e um `review.html`.
+
+O resultado nasce com `review_status=machine-proposed`. Uma validação estrutural
+garante cobertura e ordem, mas não significa que uma pessoa aprovou as caixas:
+
+```powershell
+rescore alignment-validate `
+  data/rescore-local/items/exemplo-pagina-1/alignment/measure-regions.json
+```
+
+As imagens de sobreposição devem ser conferidas antes do treino. O algoritmo
+prefere o início real do sistema para que o primeiro compasso conserve clave,
+armadura e fórmula de compasso, evitando começar sobre uma haste alinhada.
+
 ## Campos importantes
 
 - `source_type`: `printed`, `handwritten` ou `mixed`;
@@ -71,6 +107,8 @@ MusicXML. O arquivo editável nunca substitui a referência original.
 - `alignment.measure_start` e `measure_end`: único intervalo que a amostra afirma
   representar;
 - `alignment.status`: `verified`, `inferred` ou `unassigned`;
+- `alignment.review_status`: proposta da máquina ou revisão humana;
+- `alignment.regions_file`: caixas de compassos e métricas geométricas;
 - `verification`: quanto da transcrição foi revisado;
 - `writer`: copista ou mão, quando conhecida;
 - `checksums`: integridade dos arquivos.

@@ -389,6 +389,11 @@ def validate_dataset(root: Path, *, verify_hashes: bool = True) -> dict[str, Any
         for name in ("musicxml", "source_score"):
             if isinstance(ground_truth.get(name), dict):
                 file_records.append(ground_truth[name])
+        alignment = item.get("alignment", {})
+        for name in ("regions_file", "review_html"):
+            if isinstance(alignment.get(name), dict):
+                file_records.append(alignment[name])
+        file_records.extend(alignment.get("preview_images", []))
         for record in file_records:
             relative = record.get("path", "")
             try:

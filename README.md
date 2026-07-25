@@ -121,6 +121,8 @@ rescore canonicalize arquivo.mxl --output partitura.json
 rescore normalize-scherzo candidato.mxl modelo.musicxml
 rescore dataset-init data/meu-conjunto
 rescore dataset-validate data/meu-conjunto
+rescore dataset-align data/meu-conjunto --id meu-item --page-measures 8,8
+rescore alignment-validate data/meu-conjunto/items/meu-item/alignment/measure-regions.json
 ```
 
 Use `rescore --help` ou `rescore <comando> --help` para ver todos os argumentos.
