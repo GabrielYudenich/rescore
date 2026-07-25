@@ -4,7 +4,6 @@ from pathlib import Path
 from rescore.mscz import inspect_mscz
 from rescore.musicxml import parse_musicxml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

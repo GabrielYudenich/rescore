@@ -55,8 +55,7 @@ class ScanAnnotationTests(unittest.TestCase):
         first_centre = 100
         last_centre = 2200
         centres = [
-            first_centre
-            + fraction * (last_centre - first_centre)
+            first_centre + fraction * (last_centre - first_centre)
             for fraction in CHOROS9_STAFF_CENTER_FRACTIONS
         ]
         for centre in centres:
@@ -74,9 +73,7 @@ class ScanAnnotationTests(unittest.TestCase):
             source = Path(folder) / "source.png"
             output = Path(folder) / "families"
             cv2.imwrite(str(source), image)
-            result = create_choros9_family_crops(
-                source, report, output, scale=2.0
-            )
+            result = create_choros9_family_crops(source, report, output, scale=2.0)
             keys_harp = cv2.imread(
                 result["families"]["keys-harp"]["path"],
                 cv2.IMREAD_GRAYSCALE,
@@ -87,9 +84,7 @@ class ScanAnnotationTests(unittest.TestCase):
             )
 
         self.assertGreaterEqual(result["detected_staff_groups"], 20)
-        self.assertEqual(
-            result["families"]["keys-harp"]["expected_staves"], 4
-        )
+        self.assertEqual(result["families"]["keys-harp"]["expected_staves"], 4)
         self.assertEqual(result["families"]["strings"]["expected_staves"], 5)
         self.assertIsNotNone(keys_harp)
         self.assertIsNotNone(strings)

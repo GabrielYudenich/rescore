@@ -11,7 +11,6 @@ from pathlib import Path
 
 from .musicxml import _read_musicxml
 
-
 # Stable top-to-bottom orchestral order used throughout the scanned Eschig
 # edition. Compound labels intentionally retain the original French wording.
 CHOROS9_PART_NAMES = (
@@ -164,9 +163,7 @@ def _align_opening_parts(names: list[str]) -> list[int]:
 
 def _fraction_text(value: Fraction) -> str:
     return (
-        str(value.numerator)
-        if value.denominator == 1
-        else f"{value.numerator}/{value.denominator}"
+        str(value.numerator) if value.denominator == 1 else f"{value.numerator}/{value.denominator}"
     )
 
 
@@ -178,16 +175,12 @@ def _position_groups(events: list[dict]) -> list[list[dict]]:
             raw_groups[-1].append(event)
         else:
             raw_groups.append([event])
-    raw_groups.sort(
-        key=lambda group: min(float(event["default_x"]) for event in group)
-    )
+    raw_groups.sort(key=lambda group: min(float(event["default_x"]) for event in group))
     merged: list[list[dict]] = []
     for group in raw_groups:
         position = statistics.median(float(event["default_x"]) for event in group)
         if merged:
-            previous = statistics.median(
-                float(event["default_x"]) for event in merged[-1]
-            )
+            previous = statistics.median(float(event["default_x"]) for event in merged[-1])
             if abs(position - previous) <= 6:
                 merged[-1].extend(group)
                 continue
@@ -200,16 +193,13 @@ def _estimate_sixteenth_step(streams: list[list[list[dict]]]) -> float | None:
     gaps: list[float] = []
     for groups in streams:
         positions = [
-            statistics.median(float(event["default_x"]) for event in group)
-            for group in groups
+            statistics.median(float(event["default_x"]) for event in group) for group in groups
         ]
         for left, right, left_group, right_group in zip(
             positions, positions[1:], groups, groups[1:]
         ):
             types = {
-                event.get("type")
-                for event in (*left_group, *right_group)
-                if event.get("type")
+                event.get("type") for event in (*left_group, *right_group) if event.get("type")
             }
             gap = right - left
             if types & {"16th", "32nd"} and 16 <= gap <= 48:
@@ -237,15 +227,9 @@ def reconstruct_scanned_rhythm(score: dict, meter: str) -> dict:
     if sixteenth_slots < 1:
         return {"applied": False, "reason": "fórmula sem subdivisão utilizável"}
 
-    by_measure_stream: dict[
-        tuple[int, str, str, str], list[dict]
-    ] = defaultdict(list)
+    by_measure_stream: dict[tuple[int, str, str, str], list[dict]] = defaultdict(list)
     for event in score["events"]:
-        if (
-            event.get("pitch")
-            and not event.get("grace")
-            and event.get("default_x") is not None
-        ):
+        if event.get("pitch") and not event.get("grace") and event.get("default_x") is not None:
             key = (
                 int(event["measure_index"]),
                 event["part_id"],
@@ -307,19 +291,14 @@ def reconstruct_scanned_rhythm(score: dict, meter: str) -> dict:
             if slots_per_quarter == 8:
                 thirty_second_streams += 1
             positions = [
-                statistics.median(float(event["default_x"]) for event in group)
-                for group in groups
+                statistics.median(float(event["default_x"]) for event in group) for group in groups
             ]
             base = positions[0]
             slots: list[int] = []
             for position in positions:
                 slot = max(
                     0,
-                    round(
-                        (position - base)
-                        / step
-                        * Fraction(slots_per_quarter, 4)
-                    ),
+                    round((position - base) / step * Fraction(slots_per_quarter, 4)),
                 )
                 if slots:
                     slot = max(slot, slots[-1] + 1)
@@ -343,14 +322,8 @@ def reconstruct_scanned_rhythm(score: dict, meter: str) -> dict:
                     continue
 
             onsets = [Fraction(slot, slots_per_quarter) for slot in slots]
-            gaps = [
-                right - left for left, right in zip(onsets, onsets[1:]) if right > left
-            ]
-            fallback_duration = (
-                statistics.median(gaps)
-                if gaps
-                else Fraction(1, slots_per_quarter)
-            )
+            gaps = [right - left for left, right in zip(onsets, onsets[1:]) if right > left]
+            fallback_duration = statistics.median(gaps) if gaps else Fraction(1, slots_per_quarter)
             for group_index, group in enumerate(groups):
                 onset = onsets[group_index]
                 if group_index + 1 < len(groups):
@@ -369,9 +342,7 @@ def reconstruct_scanned_rhythm(score: dict, meter: str) -> dict:
             reconstructed_streams += 1
 
     if removed_ids:
-        score["events"] = [
-            event for event in score["events"] if id(event) not in removed_ids
-        ]
+        score["events"] = [event for event in score["events"] if id(event) not in removed_ids]
         score["events_count"] = len(score["events"])
     return {
         "applied": bool(reconstructed_streams),
@@ -387,9 +358,7 @@ def reconstruct_scanned_rhythm(score: dict, meter: str) -> dict:
     }
 
 
-def _event_counter(
-    events: list[dict], *, include_pitch: bool
-) -> dict[tuple, int]:
+def _event_counter(events: list[dict], *, include_pitch: bool) -> dict[tuple, int]:
     counter: dict[tuple, int] = defaultdict(int)
     for event in events:
         key = (
@@ -409,11 +378,7 @@ def _counter_metric(reference: dict[tuple, int], candidate: dict[tuple, int]) ->
     candidate_count = sum(candidate.values())
     precision = matched / candidate_count if candidate_count else 0.0
     recall = matched / reference_count if reference_count else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision + recall
-        else 0.0
-    )
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
         "matched": matched,
         "reference": reference_count,
@@ -532,7 +497,9 @@ def _pitch_number(pitch: str | None) -> int | None:
     return (octave + 1) * 12 + steps.get(step, 0) + alter
 
 
-def _part_measure_tokens(score: dict) -> dict[tuple[str, int], dict[tuple[Fraction, Fraction], tuple[int, ...]]]:
+def _part_measure_tokens(
+    score: dict,
+) -> dict[tuple[str, int], dict[tuple[Fraction, Fraction], tuple[int, ...]]]:
     """Return chord-aware rhythmic/pitch tokens for cross-staff comparison."""
     grouped: dict[tuple[str, int, Fraction, Fraction], list[int]] = defaultdict(list)
     for event in score["events"]:
@@ -546,7 +513,9 @@ def _part_measure_tokens(score: dict) -> dict[tuple[str, int], dict[tuple[Fracti
             Fraction(event["duration"]),
         )
         grouped[key].append(number)
-    result: dict[tuple[str, int], dict[tuple[Fraction, Fraction], tuple[int, ...]]] = defaultdict(dict)
+    result: dict[tuple[str, int], dict[tuple[Fraction, Fraction], tuple[int, ...]]] = defaultdict(
+        dict
+    )
     for (part_id, measure, onset, duration), pitches in grouped.items():
         result[(part_id, measure)][(onset, duration)] = tuple(sorted(pitches))
     return result
@@ -571,7 +540,9 @@ def _comparison_for_measure(
         if len(left_chord) != len(right_chord):
             continue
         comparable += 1
-        offsets.extend(right_pitch - left_pitch for left_pitch, right_pitch in zip(left_chord, right_chord))
+        offsets.extend(
+            right_pitch - left_pitch for left_pitch, right_pitch in zip(left_chord, right_chord)
+        )
     offset = offsets[0] if offsets and len(set(offsets)) == 1 else None
     pitch_ratio = comparable / len(common) if common else 0.0
     return {
@@ -643,16 +614,17 @@ def analyze_doublings(score: dict, *, meter: str | None = None) -> dict:
             if strong and len(offsets) == 1:
                 relation = "uníssono" if next(iter(offsets)) == 0 else "transposição constante"
             if rhythmic < 0.65 or not relation:
-                if (
-                    rhythmic >= 0.55
-                    and _is_expected_doubling_pair(left_part["name"], right_part["name"])
+                if rhythmic >= 0.55 and _is_expected_doubling_pair(
+                    left_part["name"], right_part["name"]
                 ):
                     rhythmic_leads.append(
                         {
                             "left": left_part,
                             "right": right_part,
                             "measures_with_rhythmic_evidence": [
-                                item["measure"] for item in per_measure if item["timing_ratio"] >= 0.55
+                                item["measure"]
+                                for item in per_measure
+                                if item["timing_ratio"] >= 0.55
                             ],
                             "rhythmic_similarity": round(rhythmic, 4),
                             "reason": "ritmo parecido, mas alturas insuficientes para confirmar a duplicação",
@@ -689,7 +661,11 @@ def analyze_doublings(score: dict, *, meter: str | None = None) -> dict:
         "confirmed_doublings": candidates,
         "rhythmic_review_leads": sorted(
             rhythmic_leads,
-            key=lambda item: (-item["rhythmic_similarity"], item["left"]["id"], item["right"]["id"]),
+            key=lambda item: (
+                -item["rhythmic_similarity"],
+                item["left"]["id"],
+                item["right"]["id"],
+            ),
         ),
     }
 
@@ -755,18 +731,13 @@ def merge_measure_candidates(sources: list[Path], output: Path) -> dict:
         if len(parts) == maximum_parts:
             alignments.append(list(range(maximum_parts)))
         else:
-            names = [
-                source_names[index].get(part.get("id", ""), "")
-                for part in parts
-            ]
+            names = [source_names[index].get(part.get("id", ""), "") for part in parts]
             alignments.append(_align_opening_parts(names))
     padded_parts: list[dict] = []
     for part_index, base_part in enumerate(base_parts):
         for measure in list(base_part.findall("measure")):
             base_part.remove(measure)
-        for measure_index, (parts, alignment) in enumerate(
-            zip(source_parts, alignments), 1
-        ):
+        for measure_index, (parts, alignment) in enumerate(zip(source_parts, alignments), 1):
             source_part_index = next(
                 (
                     index
@@ -777,16 +748,12 @@ def merge_measure_candidates(sources: list[Path], output: Path) -> dict:
             )
             if source_part_index is None:
                 measure = ET.Element("measure")
-                template_measure = roots[template_index].findall("part")[
-                    part_index
-                ].find("measure")
+                template_measure = roots[template_index].findall("part")[part_index].find("measure")
                 if template_measure is not None:
                     attributes = template_measure.find("attributes")
                     if attributes is not None:
                         measure.append(copy.deepcopy(attributes))
-                padded_parts.append(
-                    {"measure": measure_index, "part": part_index + 1}
-                )
+                padded_parts.append({"measure": measure_index, "part": part_index + 1})
             else:
                 measures = parts[source_part_index].findall("measure")
                 if not measures:
@@ -825,9 +792,7 @@ def replace_choros9_family_parts(
     root = ET.fromstring(_read_musicxml(base))
     base_parts = root.findall("part")
     if len(base_parts) != 24:
-        raise ValueError(
-            f"a base focada precisa ter 24 pautas; encontradas {len(base_parts)}"
-        )
+        raise ValueError(f"a base focada precisa ter 24 pautas; encontradas {len(base_parts)}")
     measure_count = len(base_parts[0].findall("measure"))
     applied = []
     for first_staff, source in sorted(replacements.items()):
@@ -837,9 +802,7 @@ def replace_choros9_family_parts(
             raise ValueError(f"o recorte não contém pautas: {source}")
         if first_staff < 1 or first_staff + len(replacement_parts) - 1 > 24:
             raise ValueError(f"intervalo de pautas inválido para {source}")
-        replacement_counts = {
-            len(part.findall("measure")) for part in replacement_parts
-        }
+        replacement_counts = {len(part.findall("measure")) for part in replacement_parts}
         if replacement_counts != {measure_count}:
             raise ValueError(
                 f"{source} possui {sorted(replacement_counts)} compassos por pauta; "
@@ -888,9 +851,7 @@ def replace_choros9_family_parts(
     }
 
 
-def extract_measure_candidate(
-    source: Path, output: Path, measure_index: int
-) -> dict:
+def extract_measure_candidate(source: Path, output: Path, measure_index: int) -> dict:
     """Create a standalone candidate from one measure of a full-page export."""
     root = ET.fromstring(_read_musicxml(source))
     parts = root.findall("part")
@@ -904,9 +865,7 @@ def extract_measure_candidate(
         try:
             selected = measures[measure_index]
         except IndexError as exc:
-            raise ValueError(
-                f"a parte {part_index} não contém o compasso solicitado"
-            ) from exc
+            raise ValueError(f"a parte {part_index} não contém o compasso solicitado") from exc
         if extracted_number is None:
             extracted_number = selected.get("number")
         selected_copy = copy.deepcopy(selected)
@@ -936,9 +895,7 @@ def apply_choros9_page4_rhythm_profile(score: dict) -> dict:
 
     triplet_parts = {"P16", "P17", "P18", "P19"}
     original = list(score["events"])
-    retained = [
-        event for event in original if event["part_id"] not in triplet_parts
-    ]
+    retained = [event for event in original if event["part_id"] not in triplet_parts]
     restored: list[dict] = []
     synthetic_events = 0
     profiled_measures = 0
@@ -959,13 +916,9 @@ def apply_choros9_page4_rhythm_profile(score: dict) -> dict:
             # Merge groups again with a wider, still conservative threshold.
             merged: list[list[dict]] = []
             for group in groups:
-                position = statistics.median(
-                    float(event["default_x"]) for event in group
-                )
+                position = statistics.median(float(event["default_x"]) for event in group)
                 if merged:
-                    previous = statistics.median(
-                        float(event["default_x"]) for event in merged[-1]
-                    )
+                    previous = statistics.median(float(event["default_x"]) for event in merged[-1])
                     if position - previous <= 20:
                         merged[-1].extend(group)
                         continue
@@ -974,16 +927,13 @@ def apply_choros9_page4_rhythm_profile(score: dict) -> dict:
                 retained.extend(events)
                 continue
             positions = [
-                statistics.median(float(event["default_x"]) for event in group)
-                for group in merged
+                statistics.median(float(event["default_x"]) for event in group) for group in merged
             ]
             if positions[-1] == positions[0]:
                 retained.extend(events)
                 continue
             target_positions = [
-                positions[0]
-                + (positions[-1] - positions[0]) * index / 5
-                for index in range(6)
+                positions[0] + (positions[-1] - positions[0]) * index / 5 for index in range(6)
             ]
             onsets = (
                 Fraction(0),
@@ -993,9 +943,7 @@ def apply_choros9_page4_rhythm_profile(score: dict) -> dict:
                 Fraction(8, 3),
                 Fraction(10, 3),
             )
-            for slot, (target_x, onset) in enumerate(
-                zip(target_positions, onsets)
-            ):
+            for slot, (target_x, onset) in enumerate(zip(target_positions, onsets)):
                 source_index = min(
                     range(len(positions)),
                     key=lambda index: abs(positions[index] - target_x),
@@ -1007,9 +955,7 @@ def apply_choros9_page4_rhythm_profile(score: dict) -> dict:
                     event["duration"] = "2/3"
                     event["default_x"] = target_x
                     event["tuplet"] = {"actual": "3", "normal": "2"}
-                    event["tuplet_group"] = (
-                        f"{part_id}-{measure_index}-quarter-triplet-{slot // 3}"
-                    )
+                    event["tuplet_group"] = f"{part_id}-{measure_index}-quarter-triplet-{slot // 3}"
                     event["chord"] = note_index > 0
                     restored.append(event)
                     if source_index != slot:
@@ -1019,18 +965,12 @@ def apply_choros9_page4_rhythm_profile(score: dict) -> dict:
     sustained_parts = {"P23", "P24"}
     sustained_templates = {
         part_id: next(
-            (
-                event
-                for event in original
-                if event["part_id"] == part_id and event.get("pitch")
-            ),
+            (event for event in original if event["part_id"] == part_id and event.get("pitch")),
             None,
         )
         for part_id in sustained_parts
     }
-    retained = [
-        event for event in retained if event["part_id"] not in sustained_parts
-    ]
+    retained = [event for event in retained if event["part_id"] not in sustained_parts]
     sustained_events = 0
     for part_id, template in sustained_templates.items():
         if template is None:
@@ -1072,7 +1012,7 @@ def apply_choros9_page4_rhythm_profile(score: dict) -> dict:
 def _pitch_rank(note: ET.Element) -> int:
     pitch = note.find("pitch")
     if pitch is None:
-        return -10**6
+        return -(10**6)
     steps = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
     step = steps.get(pitch.findtext("step") or "", 0)
     alter = int(float(pitch.findtext("alter") or "0"))
@@ -1174,9 +1114,7 @@ def _split_melodic_measure(
         if target_count == 1:
             selected_index = len(ordered) // 2
         else:
-            selected_index = round(
-                target_slot * (len(ordered) - 1) / (target_count - 1)
-            )
+            selected_index = round(target_slot * (len(ordered) - 1) / (target_count - 1))
         selected = ordered[selected_index]
         removed = []
         for note in pitched:
@@ -1204,9 +1142,7 @@ def _split_melodic_measure(
                 {
                     "measure": global_measure,
                     "source_part": source_part,
-                    "recognized_pitches": [
-                        _pitch_label(note) for note in ordered
-                    ],
+                    "recognized_pitches": [_pitch_label(note) for note in ordered],
                     "available_players": target_count,
                 }
             )
@@ -1301,16 +1237,10 @@ def build_choros9_continuous_musicxml(
     root = ET.fromstring(_read_musicxml(opening))
     target_parts = {part.get("id", ""): part for part in root.findall("part")}
     if len(target_parts) != 35:
-        raise ValueError(
-            f"a abertura precisa ter 35 partes; encontradas {len(target_parts)}"
-        )
-    opening_measures = {
-        len(part.findall("measure")) for part in target_parts.values()
-    }
+        raise ValueError(f"a abertura precisa ter 35 partes; encontradas {len(target_parts)}")
+    opening_measures = {len(part.findall("measure")) for part in target_parts.values()}
     if opening_measures != {3}:
-        raise ValueError(
-            "a abertura contínua precisa conter exatamente três compassos verificados"
-        )
+        raise ValueError("a abertura contínua precisa conter exatamente três compassos verificados")
     for part in target_parts.values():
         for index, measure in enumerate(part.findall("measure"), 1):
             measure.set("number", str(index))
@@ -1324,11 +1254,7 @@ def build_choros9_continuous_musicxml(
     for source_id, targets in CHOROS9_OPENING_REFERENCE_MAP.items():
         melodic_targets = [target for target in targets if target[1] is None]
         for target_id, staff in targets:
-            slot = (
-                melodic_targets.index((target_id, staff))
-                if staff is None
-                else 0
-            )
+            slot = melodic_targets.index((target_id, staff)) if staff is None else 0
             target_mapping[target_id] = (
                 source_id,
                 staff,
@@ -1364,17 +1290,13 @@ def build_choros9_continuous_musicxml(
     }
     for continuation in continuations:
         continuation_root = ET.fromstring(_read_musicxml(continuation))
-        source_parts = {
-            part.get("id", ""): part for part in continuation_root.findall("part")
-        }
+        source_parts = {part.get("id", ""): part for part in continuation_root.findall("part")}
         if len(source_parts) != 24:
             raise ValueError(
                 f"{continuation} precisa ter 24 pautas condensadas; "
                 f"foram encontradas {len(source_parts)}"
             )
-        measure_counts = {
-            len(part.findall("measure")) for part in source_parts.values()
-        }
+        measure_counts = {len(part.findall("measure")) for part in source_parts.values()}
         if len(measure_counts) != 1:
             raise ValueError(
                 f"{continuation} possui contagens de compassos divergentes: "
@@ -1406,12 +1328,8 @@ def build_choros9_continuous_musicxml(
                         global_measure,
                     )
                 else:
-                    source_id, _, target_slot, target_count = target_mapping[
-                        target_id
-                    ]
-                    source_measure = source_parts[source_id].findall("measure")[
-                        local_measure
-                    ]
+                    source_id, _, target_slot, target_count = target_mapping[target_id]
+                    source_measure = source_parts[source_id].findall("measure")[local_measure]
                     if source_id in polyphonic_sources:
                         measure = copy.deepcopy(source_measure)
                         _remove_print_nodes(measure)
@@ -1458,9 +1376,7 @@ def apply_choros9_part_profile(source: Path, output: Path) -> dict:
             "expected_parts": len(CHOROS9_PART_NAMES),
         }
     resolved = []
-    for index, (score_part, name) in enumerate(
-        zip(score_parts, CHOROS9_PART_NAMES), 1
-    ):
+    for index, (score_part, name) in enumerate(zip(score_parts, CHOROS9_PART_NAMES), 1):
         part_name = score_part.find("part-name")
         if part_name is None:
             part_name = ET.SubElement(score_part, "part-name")

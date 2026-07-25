@@ -50,10 +50,30 @@ class NormalizeTests(unittest.TestCase):
 
     def test_scherzo_page80_keeps_vocals_before_strings(self):
         names = [
-            "Picc.", "Fl.", "Ob.", "C. I.", "Cl.", "Cl. B.", "Fg.",
-            "Cfg.", "Voice", "Tpa.", "Voice", "Trp.", "Trb.", "Voice",
-            "Tb.", "Timp.", "Pno.", "Voice", "Voice", "Vl. I", "Vl. II",
-            "Vla.", "Vc.", "Cb.",
+            "Picc.",
+            "Fl.",
+            "Ob.",
+            "C. I.",
+            "Cl.",
+            "Cl. B.",
+            "Fg.",
+            "Cfg.",
+            "Voice",
+            "Tpa.",
+            "Voice",
+            "Trp.",
+            "Trb.",
+            "Voice",
+            "Tb.",
+            "Timp.",
+            "Pno.",
+            "Voice",
+            "Voice",
+            "Vl. I",
+            "Vl. II",
+            "Vla.",
+            "Vc.",
+            "Cb.",
         ]
         parts = [{"id": f"P{index}", "name": name} for index, name in enumerate(names, 1)]
         layout, _audit = _scherzo_layout_for_page(80, parts)
@@ -116,9 +136,7 @@ class NormalizeTests(unittest.TestCase):
             self.assertEqual(len(notes), 20)
             self.assertEqual({item["voice"] for item in notes}, {"1", "2"})
             self.assertTrue(all(item["duration"] == "1/5" for item in notes))
-            self.assertTrue(
-                all(item["tuplet"] == {"actual": "5", "normal": "4"} for item in notes)
-            )
+            self.assertTrue(all(item["tuplet"] == {"actual": "5", "normal": "4"} for item in notes))
             self.assertEqual(len({item["tuplet_group"] for item in notes}), 4)
 
     def test_normalizes_page41_two_note_tremolo_pairs(self):
@@ -161,9 +179,7 @@ class NormalizeTests(unittest.TestCase):
             notes = [item for item in source if item["part_id"] == part_id]
             self.assertEqual(len(notes), expected)
             self.assertTrue(all(item["duration"] == "1/5" for item in notes))
-            self.assertTrue(
-                all(item["tuplet"] == {"actual": "5", "normal": "4"} for item in notes)
-            )
+            self.assertTrue(all(item["tuplet"] == {"actual": "5", "normal": "4"} for item in notes))
             self.assertTrue(all(Fraction(item["onset"]) < 4 for item in notes))
 
     def test_splits_shared_wind_chord_and_maps_bass(self):

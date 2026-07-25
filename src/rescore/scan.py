@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 CHOROS9_AUDIVERIS_CONSTANTS = {
     # Old orchestral editions leave wide gaps between instrument families.
     # Audiveris' defaults (2 interlines / 35% white) split one orchestral page
@@ -59,8 +58,9 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
     Horizontal printed material is restored after erasing the strokes so staff
     lines, ties and other long musical symbols remain available to OMR.
     """
-    import cv2
     import math
+
+    import cv2
     import numpy as np
 
     gray = cv2.imread(str(source), cv2.IMREAD_GRAYSCALE)
@@ -84,9 +84,7 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
             row_runs[-1].append(int(row))
     row_centers = [sum(run) // len(run) for run in row_runs]
     center_differences = [
-        right - left
-        for left, right in zip(row_centers, row_centers[1:])
-        if 5 <= right - left <= 30
+        right - left for left, right in zip(row_centers, row_centers[1:]) if 5 <= right - left <= 30
     ]
     if not center_differences:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -110,9 +108,7 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
     joined = cv2.morphologyEx(
         nonhorizontal,
         cv2.MORPH_CLOSE,
-        cv2.getStructuringElement(
-            cv2.MORPH_ELLIPSE, (closing_size, closing_size)
-        ),
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (closing_size, closing_size)),
     )
     lines = cv2.HoughLinesP(
         joined,
@@ -173,9 +169,7 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
     wedge_pairs: list[tuple[dict, dict, float]] = []
     for upper in positive:
         for lower in negative:
-            apex_distance = math.hypot(
-                upper["x2"] - lower["x2"], upper["y2"] - lower["y2"]
-            )
+            apex_distance = math.hypot(upper["x2"] - lower["x2"], upper["y2"] - lower["y2"])
             if apex_distance > interline * 4:
                 continue
             overlap_left = max(upper["x1"], lower["x1"])
@@ -184,17 +178,10 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
                 continue
 
             def projected_y(segment: dict, x: float) -> float:
-                proportion = (x - segment["x1"]) / (
-                    segment["x2"] - segment["x1"]
-                )
-                return segment["y1"] + proportion * (
-                    segment["y2"] - segment["y1"]
-                )
+                proportion = (x - segment["x1"]) / (segment["x2"] - segment["x1"])
+                return segment["y1"] + proportion * (segment["y2"] - segment["y1"])
 
-            opening = abs(
-                projected_y(upper, overlap_left)
-                - projected_y(lower, overlap_left)
-            )
+            opening = abs(projected_y(upper, overlap_left) - projected_y(lower, overlap_left))
             if opening >= interline * 6:
                 wedge_pairs.append((upper, lower, opening))
 
@@ -209,18 +196,8 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
                 existing
                 for existing in pair_clusters
                 if math.hypot(
-                    apex_x
-                    - (
-                        existing[0][0]["x2"]
-                        + existing[0][1]["x2"]
-                    )
-                    / 2,
-                    apex_y
-                    - (
-                        existing[0][0]["y2"]
-                        + existing[0][1]["y2"]
-                    )
-                    / 2,
+                    apex_x - (existing[0][0]["x2"] + existing[0][1]["x2"]) / 2,
+                    apex_y - (existing[0][0]["y2"] + existing[0][1]["y2"]) / 2,
                 )
                 <= interline * 8
             ),
@@ -250,10 +227,7 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
         pair_left = min(pair[0]["x1"], pair[1]["x1"])
         pair_right = max(pair[0]["x2"], pair[1]["x2"])
         if any(
-            abs(
-                apex_y - (existing[0]["y2"] + existing[1]["y2"]) / 2
-            )
-            <= interline * 8
+            abs(apex_y - (existing[0]["y2"] + existing[1]["y2"]) / 2) <= interline * 8
             and min(
                 pair_right,
                 max(existing[0]["x2"], existing[1]["x2"]),
@@ -278,9 +252,7 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
             midpoint_x = (candidate["x1"] + candidate["x2"]) / 2
             midpoint_y = (candidate["y1"] + candidate["y2"]) / 2
             side_y = side["y1"] + (
-                (midpoint_x - side["x1"])
-                / (side["x2"] - side["x1"])
-                * (side["y2"] - side["y1"])
+                (midpoint_x - side["x1"]) / (side["x2"] - side["x1"]) * (side["y2"] - side["y1"])
             )
             return abs(midpoint_y - side_y)
 
@@ -310,16 +282,8 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
                 255,
                 line_thickness,
             )
-        all_x = [
-            segment[key]
-            for segment in related
-            for key in ("x1", "x2")
-        ]
-        all_y = [
-            segment[key]
-            for segment in related
-            for key in ("y1", "y2")
-        ]
+        all_x = [segment[key] for segment in related for key in ("x1", "x2")]
+        all_y = [segment[key] for segment in related for key in ("y1", "y2")]
         annotations.append(
             {
                 "type": "cross-staff-conductor-wedge",
@@ -347,9 +311,7 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
         erase_mask = cv2.morphologyEx(
             erase_mask,
             cv2.MORPH_CLOSE,
-            cv2.getStructuringElement(
-                cv2.MORPH_ELLIPSE, (mask_closing, mask_closing)
-            ),
+            cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (mask_closing, mask_closing)),
         )
     repaired = gray.copy()
     repaired[erase_mask > 0] = 255
@@ -360,9 +322,7 @@ def suppress_cross_staff_annotations(source: Path, output: Path) -> dict:
         bottom = min(gray.shape[0], center + restore_radius + 1)
         protected_horizontal[top:bottom] = horizontal[top:bottom]
     repaired[protected_horizontal > 0] = gray[protected_horizontal > 0]
-    pixels_removed = int(
-        np.count_nonzero((erase_mask > 0) & (foreground > 0) & (horizontal == 0))
-    )
+    pixels_removed = int(np.count_nonzero((erase_mask > 0) & (foreground > 0) & (horizontal == 0)))
     output.parent.mkdir(parents=True, exist_ok=True)
     if not cv2.imwrite(str(output), repaired):
         raise ValueError(f"não foi possível gravar a imagem: {output}")
@@ -421,11 +381,7 @@ def reinforce_orchestral_barlines(source: Path, output: Path) -> dict:
             runs.append([int(column)])
         else:
             runs[-1].append(int(column))
-    peaks = [
-        max(run, key=lambda column: int(vertical_weight[column]))
-        for run in runs
-        if run
-    ]
+    peaks = [max(run, key=lambda column: int(vertical_weight[column])) for run in runs if run]
     if peaks:
         strongest = int(max(vertical_weight[column] for column in peaks))
         peaks = [
@@ -469,9 +425,7 @@ def reinforce_orchestral_barlines(source: Path, output: Path) -> dict:
     }
 
 
-def split_orchestral_measure_images(
-    source: Path, report: dict, output_dir: Path
-) -> list[Path]:
+def split_orchestral_measure_images(source: Path, report: dict, output_dir: Path) -> list[Path]:
     """Create small OMR sheets containing one printed measure each.
 
     The first-page instrument labels, clefs and time signature are retained on
@@ -541,9 +495,7 @@ def create_choros9_family_crops(
     bars = [int(value) for value in report.get("barline_columns", [])]
     if len(bars) < 3:
         raise ValueError("barras insuficientes para localizar as pautas")
-    interline = float(
-        report.get("annotation_filter", {}).get("interline") or 13.0
-    )
+    interline = float(report.get("annotation_filter", {}).get("interline") or 13.0)
 
     # Detect staff-line groups inside the middle measure, where labels and
     # opening clefs cannot contaminate the horizontal projection.
@@ -553,9 +505,7 @@ def create_choros9_family_crops(
     if right - left < 250:
         left = bars[0] + margin
         right = bars[-1] - margin
-    foreground = cv2.threshold(
-        gray[:, left:right], 200, 255, cv2.THRESH_BINARY_INV
-    )[1]
+    foreground = cv2.threshold(gray[:, left:right], 200, 255, cv2.THRESH_BINARY_INV)[1]
     kernel_width = max(80, int(round((right - left) * 0.2)))
     horizontal = cv2.morphologyEx(
         foreground,
@@ -598,9 +548,7 @@ def create_choros9_family_crops(
         else:
             centres.append((centre, error))
     if len(centres) < 20:
-        raise ValueError(
-            f"somente {len(centres)} pautas foram localizadas para o recorte"
-        )
+        raise ValueError(f"somente {len(centres)} pautas foram localizadas para o recorte")
     first_centre = centres[0][0]
     last_centre = centres[-1][0]
     if last_centre - first_centre < interline * 100:

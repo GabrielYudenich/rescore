@@ -18,9 +18,7 @@ def _read_musicxml(path: Path) -> bytes:
     with zipfile.ZipFile(path) as archive:
         container = ET.fromstring(archive.read("META-INF/container.xml"))
         rootfile = next(
-            element
-            for element in container.iter()
-            if element.tag.rsplit("}", 1)[-1] == "rootfile"
+            element for element in container.iter() if element.tag.rsplit("}", 1)[-1] == "rootfile"
         )
         return archive.read(rootfile.attrib["full-path"])
 
@@ -32,7 +30,9 @@ def _strip_namespaces(root: ET.Element) -> ET.Element:
 
 
 def _fraction_text(value: Fraction) -> str:
-    return str(value.numerator) if value.denominator == 1 else f"{value.numerator}/{value.denominator}"
+    return (
+        str(value.numerator) if value.denominator == 1 else f"{value.numerator}/{value.denominator}"
+    )
 
 
 def normalize_part_name(value: str) -> str:

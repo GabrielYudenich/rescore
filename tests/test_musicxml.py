@@ -4,7 +4,6 @@ from pathlib import Path
 
 from rescore.musicxml import compare_scores, parse_musicxml
 
-
 SCORE = """<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">
   <part-list><score-part id="P1"><part-name>Flute 1</part-name></score-part></part-list>

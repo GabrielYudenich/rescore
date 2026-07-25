@@ -6,13 +6,20 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .choros9 import (
+    analyze_doublings,
+    audit_measure_structure,
+    build_choros9_continuous_musicxml,
+    extract_measure_candidate,
+    merge_measure_candidates,
+    replace_choros9_family_parts,
+)
 from .mscz import (
     extract_score_style,
     graft_reference_measures,
     inspect_mscz,
     normalize_fixed_meter_padding,
     normalize_mscz_voice_durations,
-    normalize_meter_map_padding,
     remove_leading_empty_vboxes,
     replace_score_style,
     set_automatic_beaming,
@@ -23,14 +30,6 @@ from .mscz import (
     validate_scherzo_mscz,
 )
 from .musicxml import compare_scores, parse_musicxml, write_canonical
-from .choros9 import (
-    analyze_doublings,
-    audit_measure_structure,
-    build_choros9_continuous_musicxml,
-    extract_measure_candidate,
-    merge_measure_candidates,
-    replace_choros9_family_parts,
-)
 from .normalize import (
     MOVEMENT1_METER_CHANGES,
     SCHERZO_METER_CHANGES,
@@ -66,14 +65,16 @@ def _run_logged(command: list[str], log_path: Path, cwd: Path) -> subprocess.Com
     )
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text(
-        "COMMAND\n" + subprocess.list2cmdline(command) + "\n\nSTDOUT\n" + result.stdout
-        + "\n\nSTDERR\n" + result.stderr,
+        "COMMAND\n"
+        + subprocess.list2cmdline(command)
+        + "\n\nSTDOUT\n"
+        + result.stdout
+        + "\n\nSTDERR\n"
+        + result.stderr,
         encoding="utf-8",
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            f"comando falhou com código {result.returncode}; consulte {log_path}"
-        )
+        raise RuntimeError(f"comando falhou com código {result.returncode}; consulte {log_path}")
     return result
 
 
@@ -98,18 +99,20 @@ def run_audiveris(
     ]
     for key, value in sorted((constants or {}).items()):
         command.extend(["-constant", f"{key}={value}"])
-    command.extend([
-        "-transcribe",
-        "-export",
-        "-save",
-        "-swap",
-        "-output",
-        str(output_dir.resolve()),
-        "-sheets",
-        *[str(page) for page in pages],
-        "--",
-        str(input_path.resolve()),
-    ])
+    command.extend(
+        [
+            "-transcribe",
+            "-export",
+            "-save",
+            "-swap",
+            "-output",
+            str(output_dir.resolve()),
+            "-sheets",
+            *[str(page) for page in pages],
+            "--",
+            str(input_path.resolve()),
+        ]
+    )
     _run_logged(command, log_path, input_path.parent)
     return sorted(output_dir.rglob("*.mxl"))
 
@@ -128,9 +131,7 @@ def _run_scan_aware_audiveris(
 ) -> list[Path]:
     """Run a full sheet first, then isolate real measures if a dense scan fails."""
     cached_fallback = output_dir.parent / "audiveris-measures" / "merged.musicxml"
-    focused_cache = (
-        output_dir.parent / "audiveris-families" / "focused-merged.musicxml"
-    )
+    focused_cache = output_dir.parent / "audiveris-families" / "focused-merged.musicxml"
     if scan_profile and focused_cache.is_file() and not force:
         return [focused_cache]
     if scan_profile and cached_fallback.is_file() and not force:
@@ -160,17 +161,13 @@ def _run_scan_aware_audiveris(
         primary_error = exc
         candidates = []
     if candidates and scan_profile and len(rendered) == 1 and scan_reports:
-        expected_measures = max(
-            0, len(scan_reports[0].get("barline_columns", [])) - 1
-        )
+        expected_measures = max(0, len(scan_reports[0].get("barline_columns", [])) - 1)
         recognized_measures = max(
             (parse_musicxml(candidate)["measures"] for candidate in candidates),
             default=0,
         )
         if expected_measures and recognized_measures < expected_measures:
-            short_primary = max(
-                candidates, key=lambda item: item.stat().st_mtime
-            )
+            short_primary = max(candidates, key=lambda item: item.stat().st_mtime)
             primary_error = RuntimeError(
                 "o OMR da página completa reconheceu "
                 f"{recognized_measures} de {expected_measures} compassos "
@@ -180,12 +177,7 @@ def _run_scan_aware_audiveris(
     if candidates or not scan_profile or len(rendered) != 1 or not scan_reports:
         if primary_error and not candidates:
             raise primary_error
-        if (
-            candidates
-            and scan_profile
-            and len(rendered) == 1
-            and scan_reports
-        ):
+        if candidates and scan_profile and len(rendered) == 1 and scan_reports:
             base = max(candidates, key=lambda item: item.stat().st_mtime)
             try:
                 if parse_musicxml(base)["parts_count"] == 24:
@@ -204,9 +196,7 @@ def _run_scan_aware_audiveris(
         return candidates
 
     fallback_root = output_dir.parent / "audiveris-measures"
-    crops = split_orchestral_measure_images(
-        rendered[0], scan_reports[0], fallback_root / "images"
-    )
+    crops = split_orchestral_measure_images(rendered[0], scan_reports[0], fallback_root / "images")
     chosen: list[Path] = []
     attempts: list[dict] = []
     for crop_index, crop in enumerate(crops, 1):
@@ -248,9 +238,7 @@ def _run_scan_aware_audiveris(
                 break
         if not result and short_primary is not None and crop_index == len(crops):
             salvaged = fallback_root / "salvaged-last-measure.musicxml"
-            extraction = extract_measure_candidate(
-                short_primary, salvaged, measure_index=-1
-            )
+            extraction = extract_measure_candidate(short_primary, salvaged, measure_index=-1)
             chosen.append(salvaged)
             attempts.append(
                 {
@@ -341,10 +329,14 @@ def _enhance_choros9_with_family_crops(
                 score["parts_count"] == specification["expected_parts"]
                 and score["measures"] == parse_musicxml(base_candidate)["measures"]
             )
-            error = None if accepted else (
-                f"{score['parts_count']} partes/{score['measures']} compassos; "
-                f"esperado {specification['expected_parts']}/"
-                f"{parse_musicxml(base_candidate)['measures']}"
+            error = (
+                None
+                if accepted
+                else (
+                    f"{score['parts_count']} partes/{score['measures']} compassos; "
+                    f"esperado {specification['expected_parts']}/"
+                    f"{parse_musicxml(base_candidate)['measures']}"
+                )
             )
         except (RuntimeError, ValueError) as exc:
             candidate = None
@@ -362,9 +354,7 @@ def _enhance_choros9_with_family_crops(
         if accepted and candidate is not None:
             replacements[specification["first_staff"]] = candidate
     if replacements:
-        merge_report = replace_choros9_family_parts(
-            base_candidate, replacements, merged
-        )
+        merge_report = replace_choros9_family_parts(base_candidate, replacements, merged)
         result = merged
     else:
         merge_report = None
@@ -400,20 +390,14 @@ def _render_omr_pages(
     reports = []
     for raw_page in raw_pages:
         annotation_cleaned = output_dir / "pages-annotation-cleaned" / raw_page.name
-        annotation_report = suppress_cross_staff_annotations(
-            raw_page, annotation_cleaned
-        )
+        annotation_report = suppress_cross_staff_annotations(raw_page, annotation_cleaned)
         destination = output_dir / "pages" / raw_page.name
-        barline_report = reinforce_orchestral_barlines(
-            annotation_cleaned, destination
-        )
+        barline_report = reinforce_orchestral_barlines(annotation_cleaned, destination)
         barline_report["annotation_filter"] = annotation_report
         reports.append(barline_report)
         processed.append(destination)
     report_path = output_dir / "scan-preprocess.json"
-    report_path.write_text(
-        json.dumps(reports, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    report_path.write_text(json.dumps(reports, ensure_ascii=False, indent=2), encoding="utf-8")
     return processed, reports
 
 
@@ -440,9 +424,7 @@ def extract_omr_candidate(
         omr_input = rendered[0]
         omr_pages = [1]
     else:
-        omr_input = images_to_tiff(
-            rendered, output_dir / "pages" / "omr-input.tiff", omr_dpi
-        )
+        omr_input = images_to_tiff(rendered, output_dir / "pages" / "omr-input.tiff", omr_dpi)
         omr_pages = list(range(1, len(pages) + 1))
     candidates = _run_scan_aware_audiveris(
         audiveris,
@@ -488,12 +470,8 @@ def convert_with_musescore(
                 suffix = destination.suffix.casefold()
                 if suffix == ".mscz":
                     with zipfile.ZipFile(destination) as archive:
-                        valid_output = (
-                            archive.testzip() is None
-                            and any(
-                                name.casefold().endswith(".mscx")
-                                for name in archive.namelist()
-                            )
+                        valid_output = archive.testzip() is None and any(
+                            name.casefold().endswith(".mscx") for name in archive.namelist()
                         )
                 elif suffix == ".pdf":
                     valid_output = pdf_info(destination)["pages"] > 0
@@ -660,17 +638,14 @@ def convert(
             )
         if scan_profile and pages == [3]:
             removed_cover_frames = remove_leading_empty_vboxes(normalized_mscz_path)
-            musescore_validation = validate_fixed_meter_mscz(
-                normalized_mscz_path, 4, 4
-            )
+            musescore_validation = validate_fixed_meter_mscz(normalized_mscz_path, 4, 4)
             musescore_validation["verified_reference_measures"] = 3
             musescore_validation["ignored_reference_measure"] = 4
             musescore_validation["removed_empty_cover_frames"] = removed_cover_frames
             musescore_validation["page_layout"] = scan_page_layout
             if not musescore_validation["valid"]:
                 raise ValueError(
-                    "validação do MuseScore falhou: "
-                    f"{musescore_validation['violations'][:3]}"
+                    f"validação do MuseScore falhou: {musescore_validation['violations'][:3]}"
                 )
             musescore_validation_path = output_dir / "musescore-validation.json"
             musescore_validation_path.write_text(
@@ -711,7 +686,9 @@ def convert(
         write_canonical(normalized_score, output_dir / "normalized.canonical.json")
         normalized_comparison_path = output_dir / "comparison-normalized.json"
         normalized_comparison_path.write_text(
-            json.dumps(compare_scores(reference_score, normalized_score), ensure_ascii=False, indent=2),
+            json.dumps(
+                compare_scores(reference_score, normalized_score), ensure_ascii=False, indent=2
+            ),
             encoding="utf-8",
         )
     elif meter:
@@ -726,7 +703,9 @@ def convert(
                 else (
                     f"choros9-page-{pages[0]}"
                     if scan_profile and len(pages) == 1
-                    else "choros9" if scan_profile else None
+                    else "choros9"
+                    if scan_profile
+                    else None
                 )
             ),
         )
@@ -813,12 +792,16 @@ def convert(
             audit_score = parse_musicxml(normalized_xml_path, include_rests=True)
             choros_doublings_path = output_dir / "doubling-analysis.json"
             choros_doublings_path.write_text(
-                json.dumps(analyze_doublings(audit_score, meter=meter), ensure_ascii=False, indent=2),
+                json.dumps(
+                    analyze_doublings(audit_score, meter=meter), ensure_ascii=False, indent=2
+                ),
                 encoding="utf-8",
             )
             choros_measure_audit_path = output_dir / "measure-audit.json"
             choros_measure_audit_path.write_text(
-                json.dumps(audit_measure_structure(audit_score, meter), ensure_ascii=False, indent=2),
+                json.dumps(
+                    audit_measure_structure(audit_score, meter), ensure_ascii=False, indent=2
+                ),
                 encoding="utf-8",
             )
 
@@ -857,8 +840,12 @@ def convert(
             if choros_measure_audit_path
             else None,
             "comparison": str(comparison_path.resolve()) if comparison_path else None,
-            "normalized_musicxml": str(normalized_xml_path.resolve()) if normalized_xml_path else None,
-            "normalized_musescore": str(normalized_mscz_path.resolve()) if normalized_mscz_path else None,
+            "normalized_musicxml": str(normalized_xml_path.resolve())
+            if normalized_xml_path
+            else None,
+            "normalized_musescore": str(normalized_mscz_path.resolve())
+            if normalized_mscz_path
+            else None,
             "normalized_pdf": str(normalized_pdf_path.resolve()) if normalized_pdf_path else None,
             "normalized_previews": [str(path.resolve()) for path in normalized_preview_paths],
             "meter_validation": str(meter_validation_path.resolve())
@@ -916,9 +903,7 @@ def assemble_scherzo_67_69(
     graft_reference_measures(reference_mscz, normalized_mscz, measure_count=8)
     automatic_beaming = set_automatic_beaming(normalized_mscz, start_measure=9)
     expected_tuplets = [
-        (staff_id, 18, "3", "4", "eighth")
-        for staff_id in ("30", "31", "32")
-        for _ in range(3)
+        (staff_id, 18, "3", "4", "eighth") for staff_id in ("30", "31", "32") for _ in range(3)
     ]
     musescore_validation = validate_scherzo_mscz(
         reference_mscz,
@@ -929,9 +914,7 @@ def assemble_scherzo_67_69(
     )
     musescore_validation["automatic_beaming"] = automatic_beaming
     if not musescore_validation["valid"]:
-        raise ValueError(
-            f"validação do MuseScore falhou: {musescore_validation['violations'][:3]}"
-        )
+        raise ValueError(f"validação do MuseScore falhou: {musescore_validation['violations'][:3]}")
     musescore_validation_path = output_dir / "musescore-validation.json"
     musescore_validation_path.write_text(
         json.dumps(musescore_validation, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -951,9 +934,7 @@ def assemble_scherzo_67_69(
         output_dir / "musescore-normalized-midi.log",
     )
     page_count = pdf_info(normalized_pdf)["pages"]
-    previews = render_pages(
-        normalized_pdf, f"1-{page_count}", output_dir / "preview", dpi=180
-    )
+    previews = render_pages(normalized_pdf, f"1-{page_count}", output_dir / "preview", dpi=180)
     normalized_score = parse_musicxml(normalized_xml)
     canonical_path = output_dir / "normalized.canonical.json"
     write_canonical(normalized_score, canonical_path)
@@ -1047,9 +1028,7 @@ def assemble_movement1_pages_7_12(
     musescore_validation["automatic_beaming"] = automatic_beaming
     musescore_validation["padding_repairs"] = padding_repairs
     if not musescore_validation["valid"]:
-        raise ValueError(
-            f"validação do MuseScore falhou: {musescore_validation['violations'][:3]}"
-        )
+        raise ValueError(f"validação do MuseScore falhou: {musescore_validation['violations'][:3]}")
     # A second native save is the closest automated equivalent to the user
     # opening the score in MuseScore. Validate that stabilized representation
     # and deliver it, preventing importer repairs from surfacing interactively.
@@ -1098,9 +1077,7 @@ def assemble_movement1_pages_7_12(
         output_dir / "musescore-normalized-midi.log",
     )
     page_count = pdf_info(normalized_pdf)["pages"]
-    previews = render_pages(
-        normalized_pdf, f"1-{page_count}", output_dir / "preview", dpi=180
-    )
+    previews = render_pages(normalized_pdf, f"1-{page_count}", output_dir / "preview", dpi=180)
     normalized_score = parse_musicxml(normalized_xml)
     canonical_path = output_dir / "normalized.canonical.json"
     write_canonical(normalized_score, canonical_path)
@@ -1173,9 +1150,7 @@ def assemble_choros9_continuous(
         encoding="utf-8",
     )
 
-    reference_style = extract_score_style(
-        reference_mscz, output_dir / "reference-style.mss"
-    )
+    reference_style = extract_score_style(reference_mscz, output_dir / "reference-style.mss")
     normalized_mscz = output_dir / "choros9-continuous.mscz"
     convert_with_musescore(
         musescore,
@@ -1202,15 +1177,9 @@ def assemble_choros9_continuous(
         }
     )
     if not validation["valid"]:
-        raise ValueError(
-            "validação da partitura contínua falhou: "
-            f"{validation['violations'][:3]}"
-        )
+        raise ValueError(f"validação da partitura contínua falhou: {validation['violations'][:3]}")
     mscz_inspection = inspect_mscz(normalized_mscz)
-    if (
-        mscz_inspection["parts_count"] != 35
-        or mscz_inspection["staves_count"] != 37
-    ):
+    if mscz_inspection["parts_count"] != 35 or mscz_inspection["staves_count"] != 37:
         raise ValueError(
             "a grade contínua perdeu instrumentos durante a importação: "
             f"{mscz_inspection['parts_count']} partes, "
@@ -1245,9 +1214,7 @@ def assemble_choros9_continuous(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "input": {
             "opening_musicxml": str(opening_musicxml.resolve()),
-            "continuation_musicxml": [
-                str(path.resolve()) for path in continuation_musicxml
-            ],
+            "continuation_musicxml": [str(path.resolve()) for path in continuation_musicxml],
             "reference_mscz": str(reference_mscz.resolve()),
         },
         "summary": {
@@ -1257,9 +1224,7 @@ def assemble_choros9_continuous(
             "pdf_pages": pdf_summary["pages"],
             "paper": "A3 landscape",
             "meter": "4/4",
-            "removed_impossible_condensed_notes": playability[
-                "condensed_chord_notes_removed"
-            ],
+            "removed_impossible_condensed_notes": playability["condensed_chord_notes_removed"],
             "ambiguous_chord_groups": len(playability["ambiguous_chord_groups"]),
         },
         "artifacts": {
@@ -1378,9 +1343,7 @@ def assemble_movement1_complete(
         output_dir / "musescore-normalized-midi.log",
     )
     page_count = pdf_info(normalized_pdf)["pages"]
-    previews = render_pages(
-        normalized_pdf, f"1-{page_count}", output_dir / "preview", dpi=180
-    )
+    previews = render_pages(normalized_pdf, f"1-{page_count}", output_dir / "preview", dpi=180)
     normalized_score = parse_musicxml(normalized_xml)
     canonical_path = output_dir / "normalized.canonical.json"
     write_canonical(normalized_score, canonical_path)
@@ -1405,8 +1368,7 @@ def assemble_movement1_complete(
             "pages": list(range(7, 42)),
             "base_musicxml": str(base_musicxml.resolve()),
             "individual_candidates": {
-                str(page): str(path.resolve())
-                for page, path in sorted(page_candidates.items())
+                str(page): str(path.resolve()) for page, path in sorted(page_candidates.items())
             },
         },
         "normalization": summary,
@@ -1548,9 +1510,7 @@ def assemble_scherzo_complete(
         output_dir / "musescore-normalized-midi.log",
     )
     page_count = pdf_info(normalized_pdf)["pages"]
-    previews = render_pages(
-        normalized_pdf, f"1-{page_count}", output_dir / "preview", dpi=180
-    )
+    previews = render_pages(normalized_pdf, f"1-{page_count}", output_dir / "preview", dpi=180)
     normalized_score = parse_musicxml(normalized_xml)
     canonical_path = output_dir / "normalized.canonical.json"
     write_canonical(normalized_score, canonical_path)
@@ -1576,8 +1536,7 @@ def assemble_scherzo_complete(
             "base_musicxml": str(base_musicxml.resolve()),
             "base_mscz": str(base_mscz.resolve()),
             "individual_candidates": {
-                str(page): str(path.resolve())
-                for page, path in sorted(page_candidates.items())
+                str(page): str(path.resolve()) for page, path in sorted(page_candidates.items())
             },
         },
         "normalization": summary,

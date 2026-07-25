@@ -115,13 +115,11 @@ def _continuous_fixture(parts: int, measures: int, condensed_chord: bool = False
             measure_nodes.append(
                 f'<measure number="{measure_number}">{attributes}{notes}</measure>'
             )
-        part_nodes.append(
-            f'<part id="P{part_index}">{"".join(measure_nodes)}</part>'
-        )
+        part_nodes.append(f'<part id="P{part_index}">{"".join(measure_nodes)}</part>')
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<score-partwise version="4.0"><part-list>'
-        f'{score_parts}</part-list>{"".join(part_nodes)}</score-partwise>'
+        f"{score_parts}</part-list>{''.join(part_nodes)}</score-partwise>"
     )
 
 
@@ -149,16 +147,12 @@ class Choros9Tests(unittest.TestCase):
             opening = root / "opening.musicxml"
             continuation = root / "page-4.musicxml"
             output = root / "continuous.musicxml"
-            opening.write_text(
-                _continuous_fixture(35, 3), encoding="utf-8"
-            )
+            opening.write_text(_continuous_fixture(35, 3), encoding="utf-8")
             continuation.write_text(
                 _continuous_fixture(24, 1, condensed_chord=True),
                 encoding="utf-8",
             )
-            report = build_choros9_continuous_musicxml(
-                opening, [continuation], output
-            )
+            report = build_choros9_continuous_musicxml(opening, [continuation], output)
             score = ET.parse(output).getroot()
         self.assertEqual(len(score.findall("part")), 35)
         self.assertEqual(
@@ -176,9 +170,7 @@ class Choros9Tests(unittest.TestCase):
             ["C"],
         )
         self.assertEqual(report["ambiguous_chord_groups"][0]["available_players"], 2)
-        continuation_measure = score.find(
-            "./part[@id='P4']/measure[@number='4']"
-        )
+        continuation_measure = score.find("./part[@id='P4']/measure[@number='4']")
         self.assertIsNone(continuation_measure.find("./attributes/time"))
         self.assertIsNone(continuation_measure.find("./attributes/clef"))
 
@@ -245,12 +237,8 @@ class Choros9Tests(unittest.TestCase):
             for event in score["events"]
             if event["part_id"] == "P16" and event["measure_index"] == 1
         ]
-        violin = [
-            event for event in score["events"] if event["part_id"] == "P20"
-        ]
-        cello = [
-            event for event in score["events"] if event["part_id"] == "P23"
-        ]
+        violin = [event for event in score["events"] if event["part_id"] == "P20"]
+        cello = [event for event in score["events"] if event["part_id"] == "P23"]
         self.assertEqual(len({event["onset"] for event in celesta}), 6)
         self.assertTrue(all(event["tuplet"] for event in celesta))
         self.assertTrue(all(event["tuplet"] is None for event in violin))
@@ -428,7 +416,13 @@ class Choros9Tests(unittest.TestCase):
             ],
             "measures": 1,
             "events": [
-                {"part_id": part, "measure_index": 1, "onset": onset, "duration": "1", "pitch": pitch}
+                {
+                    "part_id": part,
+                    "measure_index": 1,
+                    "onset": onset,
+                    "duration": "1",
+                    "pitch": pitch,
+                }
                 for part, pitches in (("P1", ("C5", "D5", "E5")), ("P2", ("C6", "D6", "E6")))
                 for onset, pitch in zip(("0", "1", "2"), pitches)
             ],

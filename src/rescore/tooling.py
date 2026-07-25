@@ -50,7 +50,9 @@ def find_musescore(project_root: Path) -> Path | None:
         Path("C:/Program Files/MuseScore 4/bin/MuseScore4.exe"),
     ]
     if local_app_data:
-        candidates.append(Path(local_app_data) / "Programs" / "MuseScore 4" / "bin" / "MuseScore4.exe")
+        candidates.append(
+            Path(local_app_data) / "Programs" / "MuseScore 4" / "bin" / "MuseScore4.exe"
+        )
     return _first_existing(candidates)
 
 

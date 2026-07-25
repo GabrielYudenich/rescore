@@ -31,9 +31,7 @@ def render_pages(
     with fitz.open(pdf_path) as document:
         invalid = [page for page in pages if page > document.page_count]
         if invalid:
-            raise ValueError(
-                f"página fora do PDF ({document.page_count} páginas): {invalid[0]}"
-            )
+            raise ValueError(f"página fora do PDF ({document.page_count} páginas): {invalid[0]}")
         for page_number in pages:
             page = document[page_number - 1]
             pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)

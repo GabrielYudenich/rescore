@@ -111,9 +111,10 @@ def replace_score_style(path: Path, style_path: Path) -> None:
     ) as temporary:
         temporary_path = Path(temporary.name)
     try:
-        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as destination:
+        with (
+            zipfile.ZipFile(path, "r") as source,
+            zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as destination,
+        ):
             destination.comment = source.comment
             for info in source.infolist():
                 if info.filename == "score_style.mss":
@@ -149,18 +150,14 @@ def set_page_layout(
     if normalized_paper not in papers:
         raise ValueError(f"papel não suportado: {paper}; use A3 ou A4")
     short_side, long_side = papers[normalized_paper]
-    width, height = (
-        (long_side, short_side) if landscape else (short_side, long_side)
-    )
+    width, height = (long_side, short_side) if landscape else (short_side, long_side)
     if margin_inches <= 0 or margin_inches * 2 >= min(width, height):
         raise ValueError("margem inválida para o tamanho de página")
     if spatium_mm <= 0:
         raise ValueError("spatium precisa ser positivo")
 
     with zipfile.ZipFile(path) as archive:
-        style_names = [
-            name for name in archive.namelist() if name.endswith("score_style.mss")
-        ]
+        style_names = [name for name in archive.namelist() if name.endswith("score_style.mss")]
         if len(style_names) != 1:
             raise ValueError(f"estilo interno não encontrado em {path}")
         style_name = style_names[0]
@@ -197,16 +194,15 @@ def set_page_layout(
     ) as temporary:
         temporary_path = Path(temporary.name)
     try:
-        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as destination:
+        with (
+            zipfile.ZipFile(path, "r") as source,
+            zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as destination,
+        ):
             destination.comment = source.comment
             for info in source.infolist():
                 destination.writestr(
                     info,
-                    style_data
-                    if info.filename == style_name
-                    else source.read(info.filename),
+                    style_data if info.filename == style_name else source.read(info.filename),
                 )
         os.replace(temporary_path, path)
     finally:
@@ -266,9 +262,10 @@ def remove_leading_empty_vboxes(path: Path) -> int:
     ) as temporary:
         temporary_path = Path(temporary.name)
     try:
-        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as destination:
+        with (
+            zipfile.ZipFile(path, "r") as source,
+            zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as destination,
+        ):
             destination.comment = source.comment
             for info in source.infolist():
                 destination.writestr(
@@ -317,12 +314,15 @@ def graft_reference_measures(reference: Path, target: Path, measure_count: int) 
     ) as temporary:
         temporary_path = Path(temporary.name)
     try:
-        with zipfile.ZipFile(target, "r") as source, zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as destination:
+        with (
+            zipfile.ZipFile(target, "r") as source,
+            zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as destination,
+        ):
             destination.comment = source.comment
             for info in source.infolist():
-                destination.writestr(info, data if info.filename == target_member else source.read(info.filename))
+                destination.writestr(
+                    info, data if info.filename == target_member else source.read(info.filename)
+                )
         os.replace(temporary_path, target)
     finally:
         if temporary_path.exists():
@@ -360,12 +360,15 @@ def set_automatic_beaming(path: Path, start_measure: int = 1) -> dict:
     ) as temporary:
         temporary_path = Path(temporary.name)
     try:
-        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as destination:
+        with (
+            zipfile.ZipFile(path, "r") as source,
+            zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as destination,
+        ):
             destination.comment = source.comment
             for info in source.infolist():
-                destination.writestr(info, data if info.filename == member else source.read(info.filename))
+                destination.writestr(
+                    info, data if info.filename == member else source.read(info.filename)
+                )
         os.replace(temporary_path, path)
     finally:
         if temporary_path.exists():
@@ -481,10 +484,15 @@ def validate_scherzo_mscz(
             tuplet.findtext("baseNote"),
         )
         for staff in target_score.findall("Staff")
-        for index, measure in enumerate(staff.findall("Measure")[reference_measures:], reference_measures + 1)
+        for index, measure in enumerate(
+            staff.findall("Measure")[reference_measures:], reference_measures + 1
+        )
         for tuplet in measure.iter("Tuplet")
     ]
-    if expected_additional_tuplets is not None and additional_tuplets != expected_additional_tuplets:
+    if (
+        expected_additional_tuplets is not None
+        and additional_tuplets != expected_additional_tuplets
+    ):
         violations.append(
             {
                 "kind": "additional_tuplet_mismatch",
@@ -521,13 +529,10 @@ def validate_fixed_meter_mscz(path: Path, beats: int, beat_type: int) -> dict:
             violations.append({"staff": staff_id, "kind": "missing_measures"})
             continue
         first_signatures = [
-            (item.findtext("sigN"), item.findtext("sigD"))
-            for item in measures[0].iter("TimeSig")
+            (item.findtext("sigN"), item.findtext("sigD")) for item in measures[0].iter("TimeSig")
         ]
         if (str(beats), str(beat_type)) not in first_signatures:
-            violations.append(
-                {"staff": staff_id, "measure": 1, "kind": "missing_time_signature"}
-            )
+            violations.append({"staff": staff_id, "measure": 1, "kind": "missing_time_signature"})
         for index, measure in enumerate(measures, 1):
             checked_measures += 1
             custom_length = measure.get("len")
@@ -658,9 +663,7 @@ def validate_meter_map_mscz(
                                 item.findtext("durationType", ""), Fraction(0)
                             )
                             dots = int(item.findtext("dots", "0"))
-                            value *= sum(
-                                Fraction(1, 2**dot) for dot in range(dots + 1)
-                            )
+                            value *= sum(Fraction(1, 2**dot) for dot in range(dots + 1))
                             value *= ratio
                         cursor += value
                         rhythmic = True
@@ -767,8 +770,7 @@ def normalize_fixed_meter_padding(path: Path, beats: int, beat_type: int) -> dic
                     (
                         child
                         for child in reversed(list(voice))
-                        if child.tag == "Rest"
-                        and child.findtext("durationType") == expected_type
+                        if child.tag == "Rest" and child.findtext("durationType") == expected_type
                     ),
                     None,
                 )
@@ -795,12 +797,15 @@ def normalize_fixed_meter_padding(path: Path, beats: int, beat_type: int) -> dic
     ) as temporary:
         temporary_path = Path(temporary.name)
     try:
-        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as destination:
+        with (
+            zipfile.ZipFile(path, "r") as source,
+            zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as destination,
+        ):
             destination.comment = source.comment
             for info in source.infolist():
-                destination.writestr(info, data if info.filename == member else source.read(info.filename))
+                destination.writestr(
+                    info, data if info.filename == member else source.read(info.filename)
+                )
         os.replace(temporary_path, path)
     finally:
         if temporary_path.exists():
@@ -808,9 +813,7 @@ def normalize_fixed_meter_padding(path: Path, beats: int, beat_type: int) -> dic
     return {"repairs": repairs, "count": len(repairs)}
 
 
-def normalize_meter_map_padding(
-    path: Path, meter_changes: dict[int, tuple[int, int]]
-) -> dict:
+def normalize_meter_map_padding(path: Path, meter_changes: dict[int, tuple[int, int]]) -> dict:
     """Remove importer-only hidden padding using each measure's active meter.
 
     MuseScore can extend a mixed-meter MusicXML measure and append an invisible
@@ -897,12 +900,15 @@ def normalize_meter_map_padding(
     ) as temporary:
         temporary_path = Path(temporary.name)
     try:
-        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as destination:
+        with (
+            zipfile.ZipFile(path, "r") as source,
+            zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as destination,
+        ):
             destination.comment = source.comment
             for info in source.infolist():
-                destination.writestr(info, data if info.filename == member else source.read(info.filename))
+                destination.writestr(
+                    info, data if info.filename == member else source.read(info.filename)
+                )
         os.replace(temporary_path, path)
     finally:
         if temporary_path.exists():
@@ -1009,8 +1015,7 @@ def normalize_mscz_voice_durations(
         # is wrong.
         if (
             len(rhythmic) == 5
-            and [item.tag for item in rhythmic]
-            == ["Tuplet", "Chord", "Rest", "endTuplet", "Rest"]
+            and [item.tag for item in rhythmic] == ["Tuplet", "Chord", "Rest", "endTuplet", "Rest"]
             and rhythmic[1].findtext("durationType") == "half"
             and rhythmic[2].findtext("durationType") == "quarter"
         ):
@@ -1025,12 +1030,8 @@ def normalize_mscz_voice_durations(
             and rhythmic[0].tag == "Rest"
             and rhythmic[1].tag == "location"
             and rhythmic[2].tag == "Tuplet"
-            and [item.tag for item in rhythmic[3:7]]
-            == ["Chord", "Chord", "Rest", "endTuplet"]
-            and all(
-                item.findtext("durationType") == "quarter"
-                for item in rhythmic[3:6]
-            )
+            and [item.tag for item in rhythmic[3:7]] == ["Chord", "Chord", "Rest", "endTuplet"]
+            and all(item.findtext("durationType") == "quarter" for item in rhythmic[3:6])
         ):
             spacer, location, tuplet = rhythmic[:3]
             invented_rest = rhythmic[5]
@@ -1055,10 +1056,7 @@ def normalize_mscz_voice_durations(
             and rhythmic[2].tag == "Tuplet"
             and [item.tag for item in rhythmic[3:8]]
             == ["Chord", "Chord", "Chord", "endTuplet", "Rest"]
-            and all(
-                item.findtext("durationType") == "quarter"
-                for item in rhythmic[3:6]
-            )
+            and all(item.findtext("durationType") == "quarter" for item in rhythmic[3:6])
         ):
             spacer, location, tuplet, first, second, third, end, tail = rhythmic[:8]
             suffix = rhythmic[8] if len(rhythmic) == 9 else None
@@ -1166,9 +1164,7 @@ def normalize_mscz_voice_durations(
             item.tag = "Tuplet"
         return flattened
 
-    def completes_open_tuplet(
-        items: list[ET.Element], quarters: Fraction, ratio: Fraction
-    ) -> bool:
+    def completes_open_tuplet(items: list[ET.Element], quarters: Fraction, ratio: Fraction) -> bool:
         stack: list[int] = []
         for index, item in enumerate(items):
             if item.tag == "Tuplet":
@@ -1183,11 +1179,14 @@ def normalize_mscz_voice_durations(
         if not base:
             return False
         actual = int(tuplet.findtext("actualNotes", "1"))
-        used = sum(
-            nominal_duration(item)
-            for item in items[start + 1 :]
-            if item.tag in {"Chord", "Rest"}
-        ) / base
+        used = (
+            sum(
+                nominal_duration(item)
+                for item in items[start + 1 :]
+                if item.tag in {"Chord", "Rest"}
+            )
+            / base
+        )
         added = (quarters / ratio) / base
         return used + added == actual
 
@@ -1292,19 +1291,15 @@ def normalize_mscz_voice_durations(
                         last_chord_node = prefix[-1]
                         current_duration = nominal_duration(last_chord_node) * active_ratio
                         replacement = (current_duration - excess) / active_ratio
-                        if replacement > 0 and set_notated_duration(
-                            last_chord_node, replacement
-                        ):
+                        if replacement > 0 and set_notated_duration(last_chord_node, replacement):
                             cursor = expected
                         else:
-                        # A malformed imported tuplet can lengthen a leading
-                        # rest while all following notes retain their relative
-                        # spacing. Shift that complete stream back by precisely
-                        # the excess; no chord duration or pitch is altered.
+                            # A malformed imported tuplet can lengthen a leading
+                            # rest while all following notes retain their relative
+                            # spacing. Shift that complete stream back by precisely
+                            # the excess; no chord duration or pitch is altered.
                             correction = ET.Element("location")
-                            ET.SubElement(correction, "fractions").text = str(
-                                -excess / 4
-                            )
+                            ET.SubElement(correction, "fractions").text = str(-excess / 4)
                             cursor = expected
                     for item in list(voice):
                         voice.remove(item)
@@ -1338,9 +1333,7 @@ def normalize_mscz_voice_durations(
                         voice.append(item)
                 elif voice_index == 1:
                     nonrhythmic = [
-                        item
-                        for item in children
-                        if item.tag not in {"Rest", "Tuplet", "endTuplet"}
+                        item for item in children if item.tag not in {"Rest", "Tuplet", "endTuplet"}
                     ]
                     for item in list(voice):
                         voice.remove(item)
@@ -1370,9 +1363,10 @@ def normalize_mscz_voice_durations(
     ) as temporary:
         temporary_path = Path(temporary.name)
     try:
-        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as destination:
+        with (
+            zipfile.ZipFile(path, "r") as source,
+            zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as destination,
+        ):
             destination.comment = source.comment
             for info in source.infolist():
                 destination.writestr(

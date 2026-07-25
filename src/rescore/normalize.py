@@ -15,7 +15,6 @@ from .choros9 import (
 )
 from .musicxml import _read_musicxml, normalize_part_name, parse_musicxml
 
-
 # 96 covers binary values and triplets; multiplying by 5 and 7 also makes
 # quintuplets and septuplets exact without rounding any musical duration.
 DIVISIONS = 3360
@@ -244,9 +243,7 @@ _DURATION_BASES = {
 }
 
 
-def _duration_notation(
-    duration: Fraction, tuplet: dict | None = None
-) -> tuple[str, int] | None:
+def _duration_notation(duration: Fraction, tuplet: dict | None = None) -> tuple[str, int] | None:
     nominal = duration
     if tuplet:
         nominal *= Fraction(int(tuplet["actual"]), int(tuplet["normal"]))
@@ -273,7 +270,9 @@ def _split_notatable_duration(duration: Fraction) -> list[Fraction]:
             base * sum(Fraction(1, 2**index) for index in range(dots + 1))
             for base in _DURATION_BASES.values()
             for dots in range(4)
-            if (base * sum(Fraction(1, 2**index) for index in range(dots + 1)) * DIVISIONS).denominator
+            if (
+                base * sum(Fraction(1, 2**index) for index in range(dots + 1)) * DIVISIONS
+            ).denominator
             == 1
         },
         reverse=True,
@@ -369,9 +368,7 @@ def _append_note(
     if event:
         for lyric_data in event.get("lyrics", []):
             lyric_attributes = {
-                key: lyric_data[key]
-                for key in ("number", "name")
-                if lyric_data.get(key)
+                key: lyric_data[key] for key in ("number", "name") if lyric_data.get(key)
             }
             lyric = ET.SubElement(note, "lyric", lyric_attributes)
             if lyric_data.get("syllabic"):
@@ -382,9 +379,7 @@ def _append_note(
                 ET.SubElement(lyric, "extend", {"type": lyric_data["extend"]})
 
 
-def _append_rest_duration(
-    measure: ET.Element, duration: Fraction, voice: str, staff: str
-) -> None:
+def _append_rest_duration(measure: ET.Element, duration: Fraction, voice: str, staff: str) -> None:
     try:
         pieces = _split_notatable_duration(duration)
     except ValueError:
@@ -406,9 +401,7 @@ def _append_rest_duration(
         _append_note(measure, None, piece, voice, staff)
 
 
-def _append_clef_attributes(
-    measure: ET.Element, changes: list[tuple[int, str, int]]
-) -> None:
+def _append_clef_attributes(measure: ET.Element, changes: list[tuple[int, str, int]]) -> None:
     attributes = ET.SubElement(measure, "attributes")
     for staff, sign, line in changes:
         clef = ET.SubElement(attributes, "clef", {"number": str(staff)})
@@ -491,9 +484,7 @@ def _emit_voice(
         emit_clefs_through(onset)
         if onset > cursor:
             _append_rest_duration(measure, onset - cursor, voice, staff)
-        ordered_chord = sorted(
-            chord_events, key=lambda item: _pitch_number(item.get("pitch"))
-        )
+        ordered_chord = sorted(chord_events, key=lambda item: _pitch_number(item.get("pitch")))
         duration_pieces = _event_pieces(ordered_chord[0], duration)
         for piece_index, (_, piece_duration) in enumerate(duration_pieces):
             for chord_index, event in enumerate(ordered_chord):
@@ -890,7 +881,11 @@ def _apply_choros9_opening_profile(
     if identification is None:
         identification = ET.SubElement(root, "identification")
     composer = next(
-        (creator for creator in identification.findall("creator") if creator.get("type") == "composer"),
+        (
+            creator
+            for creator in identification.findall("creator")
+            if creator.get("type") == "composer"
+        ),
         None,
     )
     if composer is None:
@@ -978,18 +973,12 @@ def build_meter_locked_musicxml(
     """Rebuild an OMR result with every stream clamped and filled to a fixed meter."""
     beats, beat_type, duration = _parse_meter(meter)
     candidate = parse_musicxml(candidate_path)
-    choros_profile = bool(
-        score_profile and score_profile.startswith("choros9")
-    )
+    choros_profile = bool(score_profile and score_profile.startswith("choros9"))
     opening_rhythm_profile = (
-        apply_choros9_page4_rhythm_profile(candidate)
-        if score_profile == "choros9-page-4"
-        else None
+        apply_choros9_page4_rhythm_profile(candidate) if score_profile == "choros9-page-4" else None
     )
     position_reconstruction = (
-        reconstruct_scanned_rhythm(candidate, meter)
-        if choros_profile
-        else None
+        reconstruct_scanned_rhythm(candidate, meter) if choros_profile else None
     )
     root = ET.fromstring(_read_musicxml(candidate_path))
     tree = ET.ElementTree(root)
@@ -1025,9 +1014,7 @@ def build_meter_locked_musicxml(
                 event_duration = Fraction(event["duration"])
                 if event.get("_standalone_tuplet") and event.get("tuplet"):
                     ratio = event["tuplet"]
-                    event_duration *= Fraction(
-                        int(ratio["actual"]), int(ratio["normal"])
-                    )
+                    event_duration *= Fraction(int(ratio["actual"]), int(ratio["normal"]))
                     event["duration"] = str(event_duration)
                     event["tuplet"] = None
                     event.pop("tuplet_group", None)
@@ -1045,7 +1032,9 @@ def build_meter_locked_musicxml(
                     event["duration"] = str(clipped)
                 safe_events.append(event)
             events_by_part[part_id] = safe_events
-    verified_lyrics = _apply_page109_lyrics(events_by_part) if profile_name == "page-109-split-systems" else 0
+    verified_lyrics = (
+        _apply_page109_lyrics(events_by_part) if profile_name == "page-109-split-systems" else 0
+    )
 
     for part in root.findall("part"):
         part_id = part.get("id", "")
@@ -1093,7 +1082,11 @@ def build_meter_locked_musicxml(
                 voices = sorted({event.get("voice", "1") for event in staff_events}) or ["1"]
                 for voice in voices:
                     streams.append(
-                        (staff, voice, [event for event in staff_events if event.get("voice", "1") == voice])
+                        (
+                            staff,
+                            voice,
+                            [event for event in staff_events if event.get("voice", "1") == voice],
+                        )
                     )
             for stream_index, (staff, voice, stream_events) in enumerate(streams):
                 if stream_index:
@@ -1271,9 +1264,7 @@ def build_normalized_musicxml(
                 ET.SubElement(time, "beats").text = "9"
                 ET.SubElement(time, "beat-type").text = "8"
 
-            current = [
-                event for event in part_events if event["measure_index"] == measure_index
-            ]
+            current = [event for event in part_events if event["measure_index"] == measure_index]
             streams: list[tuple[str, str, list[dict]]] = []
             for staff_number in range(1, staves + 1):
                 staff = str(staff_number)
@@ -1281,7 +1272,11 @@ def build_normalized_musicxml(
                 voices = sorted({event.get("voice", "1") for event in staff_events}) or ["1"]
                 for voice in voices:
                     streams.append(
-                        (staff, voice, [event for event in staff_events if event.get("voice", "1") == voice])
+                        (
+                            staff,
+                            voice,
+                            [event for event in staff_events if event.get("voice", "1") == voice],
+                        )
                     )
             for stream_index, (staff, voice, stream_events) in enumerate(streams):
                 if stream_index:
@@ -1302,7 +1297,9 @@ def build_normalized_musicxml(
         "output": str(output.resolve()),
         "parts": len(names),
         "mapped_events": sum(len(events) for events in mapped.values()),
-        "unmapped_target_parts": [names.get(f"P{i}", f"P{i}") for i in range(1, 31) if not mapped.get(f"P{i}")],
+        "unmapped_target_parts": [
+            names.get(f"P{i}", f"P{i}") for i in range(1, 31) if not mapped.get(f"P{i}")
+        ],
         "measures": target_measure_count,
         "page_starts": sorted(page_starts),
         "meter_validation": validation,
@@ -1399,34 +1396,662 @@ SHARED_HARPS = ("P32", "P47")
 SHARED_HARPS_PIANO = ("P32", "P47", "P33")
 
 MOVEMENT1_PAGE_LAYOUTS: dict[int, list[str | tuple[str, ...]]] = {
-    14: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P34", "P35", "P36", "P37", "P38"],
-    15: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P34", "P35", "P36", "P37", "P38"],
-    16: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P34", "P35", "P36", "P37", "P38"],
-    17: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P34", "P35", "P36", "P37", "P38"],
-    18: ["P16", "P46", "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", SPLIT_TRUMPETS, SPLIT_TROMBONES, "P28", "P29", "P39", "P33", "P34", "P35", "P36", "P37", "P38"],
-    19: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", SPLIT_TRUMPETS, SPLIT_TROMBONES, "P28", "P29", SHARED_HARPS, "P39", "P34", "P35", "P36", "P37", "P38"],
-    20: [SPLIT_FLUTE, "P18", "P20", "P21", "P22", "P23", "P24", SPLIT_TRUMPETS, "P26", "P27", "P29", "P32", "P47", "P39", "P34", "P35", "P36", "P37", "P38"],
-    21: ["P16", "P46", "P20", "P21", "P22", "P23", "P24", SPLIT_TRUMPETS, "P26", "P27", "P29", "P32", "P47", "P39", "P34", "P35", "P36", "P37", "P38"],
-    22: ["P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", SHARED_HARPS, "P33", "P34", "P35", "P36", "P37", "P38"],
-    23: ["P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", SHARED_HARPS, "P33", "P34", "P35", "P36", "P37", "P38"],
-    24: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P48", "P30", "P32", "P47", "P33", "P34", "P35", "P36", "P37", "P38"],
-    25: ["P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P48", "P30", "P32", "P47", "P33", "P34", "P35", "P36", "P37", "P38"],
-    26: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", SHARED_HARPS_PIANO, "P39", "P34", "P35", "P36", "P37", "P38"],
-    27: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P49", "P31", SHARED_HARPS_PIANO, "P39", "P34", "P35", "P36", "P37", "P38"],
-    28: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P19", "P20", "P21", "P22", "P23", "P24", "P29", "P49", SHARED_HARPS, "P39", "P33", "P34", "P35", "P36", "P37", "P38"],
-    29: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", SPLIT_TROMBONES, "P28", "P29", SHARED_HARPS, "P33", "P34", "P35", "P36", "P37", "P38"],
-    30: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P21", "P22", "P23", "P24", SPLIT_TRUMPETS, "P26", "P27", "P29", "P32", "P47", "P33", "P34", "P35", "P36", "P37", "P38"],
-    31: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", SPLIT_TRUMPETS, "P26", "P27", "P28", "P29", "P48", "P50", "P33", "P34", "P35", "P36", "P37", "P38"],
-    32: [SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", SPLIT_TROMBONES, "P28", "P48", "P50", "P34", "P35", "P36", "P37", "P38"],
-    33: ["P16", "P46", "P18", "P19", "P20", "P21", "P22", "P23", "P24", SPLIT_TRUMPETS, "P33", "P34", "P35", "P36", "P37", "P38"],
-    34: ["P16", "P46", "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P33", "P34", "P35", "P36", "P37", "P38"],
-    35: ["P16", "P46", "P17", "P18", "P19", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P33", "P34", "P35", "P36", "P37", "P38"],
-    36: ["P16", "P46", "P17", "P18", "P19", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P33", "P34", "P35", "P36", "P37", "P38"],
-    37: ["P16", "P46", "P17", "P18", "P19", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P33", "P34", "P35", "P36", "P37", "P38"],
-    38: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P48", SHARED_HARPS, "P39", "P33", "P34", "P35", "P36", "P37", "P38"],
-    39: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P48", SHARED_HARPS, "P39", "P33", "P34", "P35", "P36", "P37", "P38"],
-    40: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P30", SHARED_HARPS, "P39", "P33", "P34", "P35", "P36", "P37", "P38"],
-    41: [SPLIT_PICC, SPLIT_FLUTE, "P17", "P18", "P19", "P20", "P21", "P22", "P23", "P24", "P9", "P25", "P26", "P27", "P28", "P29", "P30", "P39", "P33", "P34", "P35", "P36", "P37", "P38"],
+    14: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    15: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    16: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    17: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    18: [
+        "P16",
+        "P46",
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        SPLIT_TRUMPETS,
+        SPLIT_TROMBONES,
+        "P28",
+        "P29",
+        "P39",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    19: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        SPLIT_TRUMPETS,
+        SPLIT_TROMBONES,
+        "P28",
+        "P29",
+        SHARED_HARPS,
+        "P39",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    20: [
+        SPLIT_FLUTE,
+        "P18",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        SPLIT_TRUMPETS,
+        "P26",
+        "P27",
+        "P29",
+        "P32",
+        "P47",
+        "P39",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    21: [
+        "P16",
+        "P46",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        SPLIT_TRUMPETS,
+        "P26",
+        "P27",
+        "P29",
+        "P32",
+        "P47",
+        "P39",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    22: [
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        SHARED_HARPS,
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    23: [
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        SHARED_HARPS,
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    24: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P48",
+        "P30",
+        "P32",
+        "P47",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    25: [
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P48",
+        "P30",
+        "P32",
+        "P47",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    26: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        SHARED_HARPS_PIANO,
+        "P39",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    27: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P49",
+        "P31",
+        SHARED_HARPS_PIANO,
+        "P39",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    28: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P29",
+        "P49",
+        SHARED_HARPS,
+        "P39",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    29: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        SPLIT_TROMBONES,
+        "P28",
+        "P29",
+        SHARED_HARPS,
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    30: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        SPLIT_TRUMPETS,
+        "P26",
+        "P27",
+        "P29",
+        "P32",
+        "P47",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    31: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        SPLIT_TRUMPETS,
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P48",
+        "P50",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    32: [
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        SPLIT_TROMBONES,
+        "P28",
+        "P48",
+        "P50",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    33: [
+        "P16",
+        "P46",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        SPLIT_TRUMPETS,
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    34: [
+        "P16",
+        "P46",
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    35: [
+        "P16",
+        "P46",
+        "P17",
+        "P18",
+        "P19",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    36: [
+        "P16",
+        "P46",
+        "P17",
+        "P18",
+        "P19",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    37: [
+        "P16",
+        "P46",
+        "P17",
+        "P18",
+        "P19",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    38: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P48",
+        SHARED_HARPS,
+        "P39",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    39: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P48",
+        SHARED_HARPS,
+        "P39",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    40: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P30",
+        SHARED_HARPS,
+        "P39",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
+    41: [
+        SPLIT_PICC,
+        SPLIT_FLUTE,
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P24",
+        "P9",
+        "P25",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+        "P39",
+        "P33",
+        "P34",
+        "P35",
+        "P36",
+        "P37",
+        "P38",
+    ],
 }
 
 
@@ -1450,9 +2075,7 @@ def _rename_score_part(root: ET.Element, part_id: str, name: str) -> None:
         instrument_name.text = name
 
 
-def _clone_score_part_after(
-    root: ET.Element, source_id: str, target_id: str, name: str
-) -> None:
+def _clone_score_part_after(root: ET.Element, source_id: str, target_id: str, name: str) -> None:
     """Clone a complete MusicXML part and keep it adjacent to its source."""
     part_list = root.find("part-list")
     source_score_part = root.find(f"./part-list/score-part[@id='{source_id}']")
@@ -1488,9 +2111,7 @@ def _pitch_height(pitch: str | None) -> int:
     return (int(octave) + 1) * 12 + semitone
 
 
-def _split_paired_melodic_part(
-    events: list[dict], source_id: str, second_id: str
-) -> list[dict]:
+def _split_paired_melodic_part(events: list[dict], source_id: str, second_id: str) -> list[dict]:
     """Split a condensed two-player staff into monophonic player parts.
 
     Two-note chords become upper/lower player lines. A lone note is duplicated,
@@ -1554,9 +2175,7 @@ def _restore_missed_quintuplets(events: list[dict]) -> int:
             group_index = int(original_onset * 4) // 5
             event["tuplet_group"] = f"{part_id}-{measure_index}-quint-{group_index}"
             restored += 1
-        last_end = max(
-            Fraction(event["onset"]) + Fraction(event["duration"]) for event in stream
-        )
+        last_end = max(Fraction(event["onset"]) + Fraction(event["duration"]) for event in stream)
         while last_end < expected:
             rest = copy.deepcopy(stream[-1])
             rest["onset"] = str(last_end)
@@ -1745,9 +2364,7 @@ def _restore_movement1_review_tuplets(events: list[dict]) -> int:
         stream = [
             event
             for event in events
-            if event["part_id"] == part_id
-            and event["measure_index"] == 28
-            and event.get("pitch")
+            if event["part_id"] == part_id and event["measure_index"] == 28 and event.get("pitch")
         ]
         if not stream or any(Fraction(event["onset"]) >= 2 for event in stream):
             continue
@@ -2179,44 +2796,113 @@ def build_movement1_block_7_12(
         (
             range(1, 6),
             {
-                "P39": "P15", "P40": "P16", "P41": "P17", "P42": "P18",
-                "P43": "P19", "P44": "P20", "P45": "P21", "P46": "P22",
-                "P47": "P23", "P48": "P24", "P49": "P9", "P50": "P25",
-                "P51": "P26", "P52": "P27", "P53": "P28", "P54": "P29",
-                "P55": "P32", "P56": "P39", "P57": "P33", "P58": "P34",
-                "P59": "P35", "P60": "P36", "P61": "P37", "P62": "P38",
+                "P39": "P15",
+                "P40": "P16",
+                "P41": "P17",
+                "P42": "P18",
+                "P43": "P19",
+                "P44": "P20",
+                "P45": "P21",
+                "P46": "P22",
+                "P47": "P23",
+                "P48": "P24",
+                "P49": "P9",
+                "P50": "P25",
+                "P51": "P26",
+                "P52": "P27",
+                "P53": "P28",
+                "P54": "P29",
+                "P55": "P32",
+                "P56": "P39",
+                "P57": "P33",
+                "P58": "P34",
+                "P59": "P35",
+                "P60": "P36",
+                "P61": "P37",
+                "P62": "P38",
             },
         ),
         (
             range(6, 13),
             {
-                "P24": "P15", "P25": "P16", "P26": "P17", "P27": "P18",
-                "P28": "P19", "P29": "P20", "P30": "P21", "P31": "P22",
-                "P32": "P23", "P33": "P24", "P34": "P9", "P35": "P25",
-                "P36": "P26", "P37": "P27", "P38": "P28", "P54": "P29",
-                "P55": "P32", "P63": "P39", "P64": "P33", "P65": "P34",
-                "P66": "P35", "P67": "P36", "P68": "P37", "P69": "P38",
+                "P24": "P15",
+                "P25": "P16",
+                "P26": "P17",
+                "P27": "P18",
+                "P28": "P19",
+                "P29": "P20",
+                "P30": "P21",
+                "P31": "P22",
+                "P32": "P23",
+                "P33": "P24",
+                "P34": "P9",
+                "P35": "P25",
+                "P36": "P26",
+                "P37": "P27",
+                "P38": "P28",
+                "P54": "P29",
+                "P55": "P32",
+                "P63": "P39",
+                "P64": "P33",
+                "P65": "P34",
+                "P66": "P35",
+                "P67": "P36",
+                "P68": "P37",
+                "P69": "P38",
             },
         ),
         (
             range(13, 23),
             {
-                "P11": "P15", "P12": "P16", "P13": "P17", "P14": "P18",
-                "P15": "P19", "P16": "P20", "P17": "P21", "P18": "P22",
-                "P19": "P23", "P20": "P24", "P21": "P9", "P22": "P25",
-                "P23": "P26", "P37": "P27", "P38": "P28", "P54": "P29",
-                "P55": "P32", "P56": "P39", "P64": "P33", "P70": "P34",
-                "P71": "P35", "P72": "P36", "P73": "P37", "P74": "P38",
+                "P11": "P15",
+                "P12": "P16",
+                "P13": "P17",
+                "P14": "P18",
+                "P15": "P19",
+                "P16": "P20",
+                "P17": "P21",
+                "P18": "P22",
+                "P19": "P23",
+                "P20": "P24",
+                "P21": "P9",
+                "P22": "P25",
+                "P23": "P26",
+                "P37": "P27",
+                "P38": "P28",
+                "P54": "P29",
+                "P55": "P32",
+                "P56": "P39",
+                "P64": "P33",
+                "P70": "P34",
+                "P71": "P35",
+                "P72": "P36",
+                "P73": "P37",
+                "P74": "P38",
             },
         ),
         (
             range(23, 30),
             {
-                "P1": "P16", "P2": "P17", "P3": "P18", "P4": "P19",
-                "P5": "P20", "P6": "P21", "P7": "P22", "P8": "P23",
-                "P9": "P24", "P10": "P9", "P23": "P26", "P37": "P27",
-                "P38": "P28", "P54": "P29", "P55": "P32", "P64": "P33",
-                "P65": "P34", "P75": "P35", "P76": "P36", "P77": "P37",
+                "P1": "P16",
+                "P2": "P17",
+                "P3": "P18",
+                "P4": "P19",
+                "P5": "P20",
+                "P6": "P21",
+                "P7": "P22",
+                "P8": "P23",
+                "P9": "P24",
+                "P10": "P9",
+                "P23": "P26",
+                "P37": "P27",
+                "P38": "P28",
+                "P54": "P29",
+                "P55": "P32",
+                "P64": "P33",
+                "P65": "P34",
+                "P75": "P35",
+                "P76": "P36",
+                "P77": "P37",
                 "P78": "P38",
             },
         ),
@@ -2225,8 +2911,7 @@ def build_movement1_block_7_12(
         keep_structural_rest = (
             18 <= event["measure_index"] <= 26
             and event.get("tuplet")
-            and _duration_notation(Fraction(event["duration"]), event["tuplet"])
-            is not None
+            and _duration_notation(Fraction(event["duration"]), event["tuplet"]) is not None
         )
         if not event.get("pitch") and not keep_structural_rest:
             continue
@@ -2247,11 +2932,26 @@ def build_movement1_block_7_12(
     if candidate_13_path is not None:
         page_13 = parse_musicxml(candidate_13_path)
         page_13_map = {
-            "P1": "P16", "P2": "P17", "P3": "P18", "P4": "P19",
-            "P5": "P20", "P6": "P21", "P7": "P22", "P8": "P23",
-            "P9": "P24", "P10": "P9", "P11": "P26", "P12": "P27",
-            "P13": "P28", "P14": "P29", "P15": "P32", "P16": "P33",
-            "P17": "P34", "P18": "P35", "P19": "P36", "P20": "P37",
+            "P1": "P16",
+            "P2": "P17",
+            "P3": "P18",
+            "P4": "P19",
+            "P5": "P20",
+            "P6": "P21",
+            "P7": "P22",
+            "P8": "P23",
+            "P9": "P24",
+            "P10": "P9",
+            "P11": "P26",
+            "P12": "P27",
+            "P13": "P28",
+            "P14": "P29",
+            "P15": "P32",
+            "P16": "P33",
+            "P17": "P34",
+            "P18": "P35",
+            "P19": "P36",
+            "P20": "P37",
             "P21": "P38",
         }
         for event in page_13["events"]:
@@ -2271,9 +2971,7 @@ def build_movement1_block_7_12(
     mapped_events = _split_paired_melodic_part(mapped_events, "P15", "P45")
     mapped_events = _split_paired_melodic_part(mapped_events, "P16", "P46")
     mapped_events.extend(
-        _clone_event(event, "P47")
-        for event in list(mapped_events)
-        if event["part_id"] == "P32"
+        _clone_event(event, "P47") for event in list(mapped_events) if event["part_id"] == "P32"
     )
     for event in mapped_events:
         # Audiveris may number grand-staff voices globally (5-8 on the lower
@@ -2325,7 +3023,11 @@ def build_movement1_block_7_12(
             measure = ET.SubElement(part, "measure", {"number": str(measure_index)})
             beats, beat_type, duration = movement1_meter(measure_index)
             if measure_index == 1:
-                attributes = copy.deepcopy(first_attributes) if first_attributes is not None else ET.Element("attributes")
+                attributes = (
+                    copy.deepcopy(first_attributes)
+                    if first_attributes is not None
+                    else ET.Element("attributes")
+                )
                 measure.append(attributes)
             elif measure_index in meter_change_measures:
                 attributes = ET.SubElement(measure, "attributes")
@@ -2337,9 +3039,7 @@ def build_movement1_block_7_12(
                 if change_measure == measure_index
             ]
             starting_clefs = [
-                (staff, sign, line)
-                for onset, staff, sign, line in measure_clefs
-                if onset == 0
+                (staff, sign, line) for onset, staff, sign, line in measure_clefs if onset == 0
             ]
             if starting_clefs:
                 if attributes is None:
@@ -2348,9 +3048,7 @@ def build_movement1_block_7_12(
                 for clef in list(attributes.findall("clef")):
                     attributes.remove(clef)
                 for staff, sign, line in starting_clefs:
-                    clef = ET.SubElement(
-                        attributes, "clef", {"number": str(staff)}
-                    )
+                    clef = ET.SubElement(attributes, "clef", {"number": str(staff)})
                     ET.SubElement(clef, "sign").text = sign
                     ET.SubElement(clef, "line").text = str(line)
             if attributes is not None and (
@@ -2382,7 +3080,11 @@ def build_movement1_block_7_12(
                 voices = sorted({event.get("voice", "1") for event in staff_events}) or ["1"]
                 for voice in voices:
                     streams.append(
-                        (staff, voice, [event for event in staff_events if event.get("voice", "1") == voice])
+                        (
+                            staff,
+                            voice,
+                            [event for event in staff_events if event.get("voice", "1") == voice],
+                        )
                     )
             clef_staves_emitted: set[str] = set()
             for stream_index, (staff, voice, stream_events) in enumerate(streams):
@@ -2391,9 +3093,7 @@ def build_movement1_block_7_12(
                     ET.SubElement(backup, "duration").text = str(duration * DIVISIONS)
                 stream_clefs = []
                 if staff not in clef_staves_emitted:
-                    stream_clefs = [
-                        change for change in inline_clefs if str(change[1]) == staff
-                    ]
+                    stream_clefs = [change for change in inline_clefs if str(change[1]) == staff]
                     clef_staves_emitted.add(staff)
                 _emit_voice(
                     measure,
@@ -2453,9 +3153,7 @@ def _candidate_clef_changes(
         node.tag = node.tag.rsplit("}", 1)[-1]
     parts = root.findall("part")
     if len(parts) != len(layout):
-        raise ValueError(
-            f"layout de claves incompatível em {path}: {len(parts)} != {len(layout)}"
-        )
+        raise ValueError(f"layout de claves incompatível em {path}: {len(parts)} != {len(layout)}")
     result: dict[str, list[tuple[int, Fraction, int, str, int]]] = defaultdict(list)
     for source_part, entry in zip(parts, layout):
         divisions = 1
@@ -2525,9 +3223,7 @@ def build_movement1_complete(
 
     base_event_count = len([event for event in base["events"] if event.get("pitch")])
     mapped_events: list[dict] = []
-    clef_changes = {
-        part_id: list(changes) for part_id, changes in MOVEMENT1_CLEF_CHANGES.items()
-    }
+    clef_changes = {part_id: list(changes) for part_id, changes in MOVEMENT1_CLEF_CHANGES.items()}
     first_measure = 45
     page_audit = []
     for page in range(14, 42):
@@ -2541,8 +3237,7 @@ def build_movement1_complete(
         layout = MOVEMENT1_PAGE_LAYOUTS[page]
         if len(layout) != len(score["parts"]):
             raise ValueError(
-                f"layout da página {page}: {len(layout)} destinos para "
-                f"{len(score['parts'])} partes"
+                f"layout da página {page}: {len(layout)} destinos para {len(score['parts'])} partes"
             )
 
         source_ids = [part["id"] for part in score["parts"]]
@@ -2569,9 +3264,7 @@ def build_movement1_complete(
             if isinstance(entry, tuple) and entry and entry[0] == "split":
                 first_target, second_target = entry[1], entry[2]
                 temporary = [_clone_event(event, first_target) for event in shifted]
-                split = _split_paired_melodic_part(
-                    temporary, first_target, second_target
-                )
+                split = _split_paired_melodic_part(temporary, first_target, second_target)
                 page_events.extend(split)
                 for event in split:
                     mapped_counts[event["part_id"]] += 1
@@ -2596,9 +3289,7 @@ def build_movement1_complete(
 
         imported_tuplet_notes = _assign_imported_tuplet_groups(page_events)
         mapped_events.extend(page_events)
-        detected_clefs = _candidate_clef_changes(
-            candidate_path, layout, first_measure
-        )
+        detected_clefs = _candidate_clef_changes(candidate_path, layout, first_measure)
         for part_id, changes in detected_clefs.items():
             clef_changes.setdefault(part_id, []).extend(changes)
         last_measure = first_measure + score["measures"] - 1
@@ -2666,7 +3357,11 @@ def build_movement1_complete(
             measure = ET.SubElement(part, "measure", {"number": str(measure_index)})
             beats, beat_type, duration = movement1_meter(measure_index)
             if measure_index == 1:
-                attributes = copy.deepcopy(first_attributes) if first_attributes is not None else ET.Element("attributes")
+                attributes = (
+                    copy.deepcopy(first_attributes)
+                    if first_attributes is not None
+                    else ET.Element("attributes")
+                )
                 measure.append(attributes)
             elif measure_index in meter_change_measures:
                 attributes = ET.SubElement(measure, "attributes")
@@ -2678,9 +3373,7 @@ def build_movement1_complete(
                 if change_measure == measure_index
             ]
             starting_clefs = [
-                (staff, sign, line)
-                for onset, staff, sign, line in measure_clefs
-                if onset == 0
+                (staff, sign, line) for onset, staff, sign, line in measure_clefs if onset == 0
             ]
             if starting_clefs:
                 if attributes is None:
@@ -2721,7 +3414,11 @@ def build_movement1_complete(
                 voices = sorted({event.get("voice", "1") for event in staff_events}) or ["1"]
                 for voice in voices:
                     streams.append(
-                        (staff, voice, [event for event in staff_events if event.get("voice", "1") == voice])
+                        (
+                            staff,
+                            voice,
+                            [event for event in staff_events if event.get("voice", "1") == voice],
+                        )
                     )
             clef_staves_emitted: set[str] = set()
             for stream_index, (staff, voice, stream_events) in enumerate(streams):
@@ -2864,18 +3561,53 @@ def _ensure_scherzo_complete_parts(root: ET.Element) -> set[str]:
 def _reorder_scherzo_parts(root: ET.Element) -> None:
     """Keep added percussion/voices out of the string block in MuseScore."""
     order = [
-        "P1", "P2", "P3", "P4", "P5", "P6", "P31", "P7", "P8", "P32",
-        "P9", "P10", "P33", "P11", "P12", "P13", "P14", "P15", "P16",
-        "P17", "P18", "P19", "P20", "P34", "P35", "P21", "P36", "P22",
-        "P23", "P24", "P25", "P37", "P38", "P39", "P40", "P41", "P42",
-        "P26", "P27", "P28", "P29", "P30",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P31",
+        "P7",
+        "P8",
+        "P32",
+        "P9",
+        "P10",
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P34",
+        "P35",
+        "P21",
+        "P36",
+        "P22",
+        "P23",
+        "P24",
+        "P25",
+        "P37",
+        "P38",
+        "P39",
+        "P40",
+        "P41",
+        "P42",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
     ]
     part_list = root.find("part-list")
     if part_list is None:
         raise ValueError("modelo do Scherzo sem part-list")
-    score_parts = {
-        item.get("id", ""): item for item in part_list.findall("score-part")
-    }
+    score_parts = {item.get("id", ""): item for item in part_list.findall("score-part")}
     if set(order) != set(score_parts):
         missing = sorted(set(order) - set(score_parts))
         extra = sorted(set(score_parts) - set(order))
@@ -3158,9 +3890,31 @@ def _scherzo_layout_for_page(
 
 
 _NON_LYRIC_TOKENS = {
-    "f", "ff", "fff", "p", "pp", "ppp", "mf", "mp", "sf", "sfz",
-    "a2", "a3", "div", "div.", "unis", "unis.", "arco", "pizz", "pizz.",
-    "sord", "sord.", "heitor", "villa", "lobos", "sinfonia",
+    "f",
+    "ff",
+    "fff",
+    "p",
+    "pp",
+    "ppp",
+    "mf",
+    "mp",
+    "sf",
+    "sfz",
+    "a2",
+    "a3",
+    "div",
+    "div.",
+    "unis",
+    "unis.",
+    "arco",
+    "pizz",
+    "pizz.",
+    "sord",
+    "sord.",
+    "heitor",
+    "villa",
+    "lobos",
+    "sinfonia",
 }
 
 
@@ -3311,9 +4065,7 @@ def build_scherzo_complete(
             if isinstance(entry, tuple) and entry and entry[0] == "split":
                 first_target, second_target = entry[1], entry[2]
                 temporary = [_clone_event(event, first_target) for event in shifted]
-                assigned_events = _split_paired_melodic_part(
-                    temporary, first_target, second_target
-                )
+                assigned_events = _split_paired_melodic_part(temporary, first_target, second_target)
             else:
                 assigned_events = []
                 for target in _layout_targets(entry):
@@ -3321,9 +4073,7 @@ def build_scherzo_complete(
             for event in assigned_events:
                 target = event["part_id"]
                 _clean_imported_lyrics(event, target in SCHERZO_VOCAL_PARTS)
-                lyric_syllables += sum(
-                    bool(lyric.get("text")) for lyric in event.get("lyrics", [])
-                )
+                lyric_syllables += sum(bool(lyric.get("text")) for lyric in event.get("lyrics", []))
                 mapped_counts[target] += 1
             page_events.extend(assigned_events)
 
@@ -3404,11 +4154,7 @@ def build_scherzo_complete(
         part_events = events_by_part.get(part_id, [])
         staves = max(
             [int(event.get("staff", "1")) for event in part_events]
-            + [
-                int(first_attributes.findtext("staves", "1"))
-                if first_attributes is not None
-                else 1
-            ]
+            + [int(first_attributes.findtext("staves", "1")) if first_attributes is not None else 1]
         )
         clef_plan = sorted(set(clef_changes.get(part_id, [])))
         for measure_index in range(first_generated_measure, end_measure + 1):
@@ -3446,9 +4192,7 @@ def build_scherzo_complete(
                 if change_measure == measure_index
             ]
             starting_clefs = [
-                (staff, sign, line)
-                for onset, staff, sign, line in measure_clefs
-                if onset == 0
+                (staff, sign, line) for onset, staff, sign, line in measure_clefs if onset == 0
             ]
             if starting_clefs:
                 if attributes is None:
@@ -3461,27 +4205,19 @@ def build_scherzo_complete(
                     ET.SubElement(clef, "sign").text = sign
                     ET.SubElement(clef, "line").text = str(line)
 
-            current = [
-                event for event in part_events if event["measure_index"] == measure_index
-            ]
+            current = [event for event in part_events if event["measure_index"] == measure_index]
             inline_clefs = [change for change in measure_clefs if change[0] > 0]
             streams: list[tuple[str, str, list[dict]]] = []
             for staff_number in range(1, staves + 1):
                 staff = str(staff_number)
-                staff_events = [
-                    event for event in current if event.get("staff", "1") == staff
-                ]
+                staff_events = [event for event in current if event.get("staff", "1") == staff]
                 voices = sorted({event.get("voice", "1") for event in staff_events}) or ["1"]
                 for voice in voices:
                     streams.append(
                         (
                             staff,
                             voice,
-                            [
-                                event
-                                for event in staff_events
-                                if event.get("voice", "1") == voice
-                            ],
+                            [event for event in staff_events if event.get("voice", "1") == voice],
                         )
                     )
             clef_staves_emitted: set[str] = set()
@@ -3491,9 +4227,7 @@ def build_scherzo_complete(
                     ET.SubElement(backup, "duration").text = str(duration * DIVISIONS)
                 stream_clefs = []
                 if staff not in clef_staves_emitted:
-                    stream_clefs = [
-                        change for change in inline_clefs if str(change[1]) == staff
-                    ]
+                    stream_clefs = [change for change in inline_clefs if str(change[1]) == staff]
                     clef_staves_emitted.add(staff)
                 _emit_voice(
                     measure,
@@ -3581,36 +4315,728 @@ SCHERZO_SHARED_HARPS_CELESTA = ("P22", "P24", "P25")
 # Filled from a page-by-page visual audit. Each item corresponds to one
 # Audiveris source part, in the order engraved at the left edge of that page.
 SCHERZO_PAGE_LAYOUTS: dict[int, list[str | tuple[str, ...]]] = {
-    70: [SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P18", "P23", "P26", "P27", "P28", "P29", "P30"],
-    71: [SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P18", "P23", "P26", "P27", "P28", "P29", "P30"],
-    72: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", SCHERZO_SPLIT_TRUMPETS, SCHERZO_SPLIT_TROMBONES, "P17", "P18", "P34", SCHERZO_SHARED_HARPS, "P23", "P26", "P27", "P28", "P29", "P30"],
-    73: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", SCHERZO_SPLIT_TRUMPETS, "P15", "P16", "P17", "P18", "P34", SCHERZO_SHARED_HARPS, "P23", "P26", "P27", "P28", "P29", "P30"],
-    74: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", SCHERZO_SHARED_HARPS, "P23", "P26", "P27", "P28", "P29", "P30"],
-    75: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P18", "P35", SCHERZO_SHARED_HARPS_PIANO, "P26", "P27", "P28", "P29", "P30"],
-    76: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", "P35", SCHERZO_SHARED_HARPS, "P26", "P27", "P28", "P29", "P30"],
-    77: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", "P35", SCHERZO_SHARED_HARPS, "P26", "P27", "P28", "P29", "P30"],
-    78: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", "P26", "P27", "P28", "P29", "P30"],
-    79: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", "P26", "P27", "P28", "P29", "P30"],
-    80: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", SCHERZO_SHARED_HARPS_PIANO, "P42", "P43", "P26", "P27", "P28", "P29", "P30"],
-    81: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", SCHERZO_SPLIT_HORNS, SCHERZO_SPLIT_TRUMPETS, SCHERZO_SPLIT_TROMBONES, "P17", "P36", SCHERZO_SHARED_HARPS, "P23", "P42", "P43", "P26", "P27", "P28", "P29", "P30"],
-    82: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P11", "P12", SCHERZO_SPLIT_TRUMPETS, SCHERZO_SPLIT_TROMBONES, "P18", "P36", SCHERZO_SHARED_HARPS, "P23", "P42", "P43", "P26", "P27", "P28", "P29", "P30"],
-    83: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", SCHERZO_SPLIT_TRUMPETS, SCHERZO_SPLIT_TROMBONES, "P18", "P36", SCHERZO_SHARED_HARPS, "P23", "P42", "P43", "P26", "P27", "P28", "P29", "P30"],
-    84: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", SCHERZO_SPLIT_TRUMPETS, "P15", "P16", "P17", "P18", "P35", "P36", SCHERZO_SHARED_HARPS, "P23", "P42", "P43", "P26", "P27", "P28", "P29", "P30"],
-    85: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", SCHERZO_SPLIT_TRUMPETS, "P15", "P16", "P17", "P18", "P35", "P36", SCHERZO_SHARED_HARPS, "P23", "P42", "P43", "P26", "P27", "P28", "P29", "P30"],
-    86: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P18", "P35", "P42", "P43", "P26", "P27", "P28", "P29", "P30"],
-    87: [SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P15", "P16", "P17", "P18", "P35", "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    88: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", SCHERZO_SPLIT_HORNS, "P15", "P16", "P17", "P18", SCHERZO_SHARED_HARPS, "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    89: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P11", "P12", SCHERZO_SPLIT_TRUMPETS, "P15", "P16", "P42", "P43", "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    90: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", SCHERZO_SPLIT_TRUMPETS, "P15", "P16", "P17", "P41", "P42", "P43", "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    91: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", SCHERZO_SPLIT_HORNS, SCHERZO_SPLIT_TRUMPETS, SCHERZO_SPLIT_TROMBONES, "P17", SCHERZO_SHARED_HARPS, "P41", "P42", "P43", "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    92: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", "P33", SCHERZO_SPLIT_HORNS, SCHERZO_SPLIT_TRUMPETS, "P17", "P35", SCHERZO_SHARED_HARPS, "P23", "P41", "P42", "P43", "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    93: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", "P33", SCHERZO_SPLIT_HORNS, SCHERZO_SPLIT_TRUMPETS, "P35", SCHERZO_SHARED_HARPS_CELESTA, "P23", "P40", "P41", "P42", "P43", "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    94: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", SCHERZO_SPLIT_HORNS, SCHERZO_SPLIT_TRUMPETS, SCHERZO_SPLIT_TROMBONES, "P17", "P35", "P23", "P40", "P41", "P42", "P43", "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    95: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P35", "P23", "P40", "P41", "P42", "P43", "P26", "P27", "P28", "P29", "P30"],
-    96: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", SCHERZO_SPLIT_TRUMPETS, SCHERZO_SPLIT_TROMBONES, "P17", "P22", "P40", "P41", "P42", "P43", "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    97: [SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", SCHERZO_SHARED_HARPS_PIANO, "P22", "P42", "P43", "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    98: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", ("P37", "P38", "P39", "P21"), SCHERZO_SHARED_HARPS_PIANO, "P22", "P42", "P43", "P44", "P45", "P26", "P27", "P28", "P29", "P30"],
-    99: [SCHERZO_SPLIT_PICC, SCHERZO_SPLIT_FLUTE, SCHERZO_SPLIT_OBOE, "P31", SCHERZO_SPLIT_CLARINET, "P32", SCHERZO_SPLIT_BASSOON, "P33", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", ("P37", "P38", "P39", "P21"), SCHERZO_SHARED_HARPS_PIANO, "P22", "P26", "P27", "P28", "P29", "P30"],
+    70: [
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P18",
+        "P23",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    71: [
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P18",
+        "P23",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    72: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        SCHERZO_SPLIT_TRUMPETS,
+        SCHERZO_SPLIT_TROMBONES,
+        "P17",
+        "P18",
+        "P34",
+        SCHERZO_SHARED_HARPS,
+        "P23",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    73: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        SCHERZO_SPLIT_TRUMPETS,
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P34",
+        SCHERZO_SHARED_HARPS,
+        "P23",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    74: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        SCHERZO_SHARED_HARPS,
+        "P23",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    75: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P18",
+        "P35",
+        SCHERZO_SHARED_HARPS_PIANO,
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    76: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P35",
+        SCHERZO_SHARED_HARPS,
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    77: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P35",
+        SCHERZO_SHARED_HARPS,
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    78: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    79: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    80: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        SCHERZO_SHARED_HARPS_PIANO,
+        "P42",
+        "P43",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    81: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        SCHERZO_SPLIT_HORNS,
+        SCHERZO_SPLIT_TRUMPETS,
+        SCHERZO_SPLIT_TROMBONES,
+        "P17",
+        "P36",
+        SCHERZO_SHARED_HARPS,
+        "P23",
+        "P42",
+        "P43",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    82: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P11",
+        "P12",
+        SCHERZO_SPLIT_TRUMPETS,
+        SCHERZO_SPLIT_TROMBONES,
+        "P18",
+        "P36",
+        SCHERZO_SHARED_HARPS,
+        "P23",
+        "P42",
+        "P43",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    83: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        SCHERZO_SPLIT_TRUMPETS,
+        SCHERZO_SPLIT_TROMBONES,
+        "P18",
+        "P36",
+        SCHERZO_SHARED_HARPS,
+        "P23",
+        "P42",
+        "P43",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    84: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        SCHERZO_SPLIT_TRUMPETS,
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P35",
+        "P36",
+        SCHERZO_SHARED_HARPS,
+        "P23",
+        "P42",
+        "P43",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    85: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        SCHERZO_SPLIT_TRUMPETS,
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P35",
+        "P36",
+        SCHERZO_SHARED_HARPS,
+        "P23",
+        "P42",
+        "P43",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    86: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P18",
+        "P35",
+        "P42",
+        "P43",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    87: [
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P35",
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    88: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        SCHERZO_SPLIT_HORNS,
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        SCHERZO_SHARED_HARPS,
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    89: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P11",
+        "P12",
+        SCHERZO_SPLIT_TRUMPETS,
+        "P15",
+        "P16",
+        "P42",
+        "P43",
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    90: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        SCHERZO_SPLIT_TRUMPETS,
+        "P15",
+        "P16",
+        "P17",
+        "P41",
+        "P42",
+        "P43",
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    91: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        SCHERZO_SPLIT_HORNS,
+        SCHERZO_SPLIT_TRUMPETS,
+        SCHERZO_SPLIT_TROMBONES,
+        "P17",
+        SCHERZO_SHARED_HARPS,
+        "P41",
+        "P42",
+        "P43",
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    92: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        "P33",
+        SCHERZO_SPLIT_HORNS,
+        SCHERZO_SPLIT_TRUMPETS,
+        "P17",
+        "P35",
+        SCHERZO_SHARED_HARPS,
+        "P23",
+        "P41",
+        "P42",
+        "P43",
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    93: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        "P33",
+        SCHERZO_SPLIT_HORNS,
+        SCHERZO_SPLIT_TRUMPETS,
+        "P35",
+        SCHERZO_SHARED_HARPS_CELESTA,
+        "P23",
+        "P40",
+        "P41",
+        "P42",
+        "P43",
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    94: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        SCHERZO_SPLIT_HORNS,
+        SCHERZO_SPLIT_TRUMPETS,
+        SCHERZO_SPLIT_TROMBONES,
+        "P17",
+        "P35",
+        "P23",
+        "P40",
+        "P41",
+        "P42",
+        "P43",
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    95: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P35",
+        "P23",
+        "P40",
+        "P41",
+        "P42",
+        "P43",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    96: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        SCHERZO_SPLIT_TRUMPETS,
+        SCHERZO_SPLIT_TROMBONES,
+        "P17",
+        "P22",
+        "P40",
+        "P41",
+        "P42",
+        "P43",
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    97: [
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        SCHERZO_SHARED_HARPS_PIANO,
+        "P22",
+        "P42",
+        "P43",
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    98: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        ("P37", "P38", "P39", "P21"),
+        SCHERZO_SHARED_HARPS_PIANO,
+        "P22",
+        "P42",
+        "P43",
+        "P44",
+        "P45",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
+    99: [
+        SCHERZO_SPLIT_PICC,
+        SCHERZO_SPLIT_FLUTE,
+        SCHERZO_SPLIT_OBOE,
+        "P31",
+        SCHERZO_SPLIT_CLARINET,
+        "P32",
+        SCHERZO_SPLIT_BASSOON,
+        "P33",
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        ("P37", "P38", "P39", "P21"),
+        SCHERZO_SHARED_HARPS_PIANO,
+        "P22",
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+    ],
 }
 
 # Page 88 ends at measure 186. Audiveris creates an eighth, empty measure from
@@ -3642,8 +5068,7 @@ def _reviewed_scherzo_layout(
     raw = SCHERZO_PAGE_LAYOUTS.get(page)
     if raw is None or len(raw) != len(parts):
         raise ValueError(
-            f"página {page}: mapa revisado incompatível "
-            f"({len(raw or [])} != {len(parts)})"
+            f"página {page}: mapa revisado incompatível ({len(raw or [])} != {len(parts)})"
         )
 
     def translate(entry: str | tuple[str, ...]) -> str | tuple[str, ...]:
@@ -3687,9 +5112,31 @@ def _legacy_scherzo_meter(measure_index: int) -> tuple[int, int, Fraction]:
 def _clean_vocal_lyrics(events: list[dict]) -> int:
     """Keep note-linked sung text while removing OMR dynamics/page furniture."""
     rejected = {
-        "f", "ff", "fff", "mf", "mp", "p", "pp", "ppp", "sf", "sfz", "sffz",
-        "div", "div.", "arco", "sord", "sord.", "copo", "(copo)", "a2", "a3",
-        "heitor", "sinfonia", "n9", "nº", "l",
+        "f",
+        "ff",
+        "fff",
+        "mf",
+        "mp",
+        "p",
+        "pp",
+        "ppp",
+        "sf",
+        "sfz",
+        "sffz",
+        "div",
+        "div.",
+        "arco",
+        "sord",
+        "sord.",
+        "copo",
+        "(copo)",
+        "a2",
+        "a3",
+        "heitor",
+        "sinfonia",
+        "n9",
+        "nº",
+        "l",
     }
     retained = 0
     for event in events:
@@ -3742,8 +5189,7 @@ def _legacy_build_scherzo_complete(
             raise ValueError(f"layout instrumental não auditado para a página {page}")
         if len(layout) != len(score["parts"]):
             raise ValueError(
-                f"layout da página {page}: {len(layout)} destinos para "
-                f"{len(score['parts'])} partes"
+                f"layout da página {page}: {len(layout)} destinos para {len(score['parts'])} partes"
             )
 
         source_ids = [part["id"] for part in score["parts"]]
@@ -3799,9 +5245,7 @@ def _legacy_build_scherzo_complete(
         detected_clefs = _candidate_clef_changes(candidate_path, layout, first_measure)
         for part_id, changes in detected_clefs.items():
             clef_changes[part_id].extend(
-                change
-                for change in changes
-                if change[0] < first_measure + page_measures
+                change for change in changes if change[0] < first_measure + page_measures
             )
         last_measure = first_measure + page_measures - 1
         page_audit.append(
@@ -3855,11 +5299,7 @@ def _legacy_build_scherzo_complete(
         part_events = events_by_part.get(part_id, [])
         staves = max(
             [int(event.get("staff", "1")) for event in part_events]
-            + [
-                int(first_attributes.findtext("staves", "1"))
-                if first_attributes is not None
-                else 1
-            ]
+            + [int(first_attributes.findtext("staves", "1")) if first_attributes is not None else 1]
         )
         clef_plan = sorted(set(clef_changes.get(part_id, [])))
         first_generated = 26 if preserve_opening else 1
@@ -3896,9 +5336,7 @@ def _legacy_build_scherzo_complete(
                 if change_measure == measure_index
             ]
             starting_clefs = [
-                (staff, sign, line)
-                for onset, staff, sign, line in measure_clefs
-                if onset == 0
+                (staff, sign, line) for onset, staff, sign, line in measure_clefs if onset == 0
             ]
             if starting_clefs:
                 if attributes is None:
@@ -3922,9 +5360,7 @@ def _legacy_build_scherzo_complete(
                 ET.SubElement(time, "beats").text = str(beats)
                 ET.SubElement(time, "beat-type").text = str(beat_type)
 
-            current = [
-                event for event in part_events if event["measure_index"] == measure_index
-            ]
+            current = [event for event in part_events if event["measure_index"] == measure_index]
             inline_clefs = [
                 (onset, staff, sign, line)
                 for onset, staff, sign, line in measure_clefs
@@ -3933,20 +5369,14 @@ def _legacy_build_scherzo_complete(
             streams: list[tuple[str, str, list[dict]]] = []
             for staff_number in range(1, staves + 1):
                 staff = str(staff_number)
-                staff_events = [
-                    event for event in current if event.get("staff", "1") == staff
-                ]
+                staff_events = [event for event in current if event.get("staff", "1") == staff]
                 voices = sorted({event.get("voice", "1") for event in staff_events}) or ["1"]
                 for voice in voices:
                     streams.append(
                         (
                             staff,
                             voice,
-                            [
-                                event
-                                for event in staff_events
-                                if event.get("voice", "1") == voice
-                            ],
+                            [event for event in staff_events if event.get("voice", "1") == voice],
                         )
                     )
             clef_staves_emitted: set[str] = set()
@@ -3956,9 +5386,7 @@ def _legacy_build_scherzo_complete(
                     ET.SubElement(backup, "duration").text = str(duration * DIVISIONS)
                 stream_clefs = []
                 if staff not in clef_staves_emitted:
-                    stream_clefs = [
-                        change for change in inline_clefs if str(change[1]) == staff
-                    ]
+                    stream_clefs = [change for change in inline_clefs if str(change[1]) == staff]
                     clef_staves_emitted.add(staff)
                 _emit_voice(measure, stream_events, duration, voice, staff, stream_clefs)
 
@@ -3968,9 +5396,7 @@ def _legacy_build_scherzo_complete(
     assembled = parse_musicxml(output, include_rests=True)
     validation = validate_meter_score(
         assembled,
-        lambda _part, measure: scherzo_meter(measure)[2]
-        if measure >= 26
-        else Fraction(1000),
+        lambda _part, measure: scherzo_meter(measure)[2] if measure >= 26 else Fraction(1000),
         require_full=lambda _part, measure: measure >= 26,
     )
     # The approved opening is intentionally excluded from the uniform-meter
