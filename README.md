@@ -21,6 +21,8 @@ errar alturas, acidentes, vozes, quiálteras, letras e a associação entre paut
 - suporte a referências MusicXML/MSCZ para comparação;
 - bloqueio opcional da fórmula de compasso;
 - auditoria de compassos e vozes antes de entregar o arquivo;
+- fila de correção assistida: detecta trechos suspeitos, cria um `.mscz` curto para
+  edição humana e devolve as correções versionadas ao conjunto de dados;
 - relatórios JSON com artefatos, métricas e avisos;
 - reaproveitamento de resultados intermediários em novas execuções.
 
@@ -128,9 +130,61 @@ rescore staff-alignment-validate data/meu-conjunto/items/meu-item/alignment/staf
 rescore dataset-export-training data/meu-conjunto --id meu-item
 rescore training-export-validate data/meu-conjunto/items/meu-item/training/samples.jsonl
 rescore dataset-review data/meu-conjunto --id meu-item --reviewer "Nome" --approve-measures --approve-staffs
+rescore detect-issues candidato.musicxml --output output/problemas
+rescore review-pack candidato.musicxml --issues output/problemas/issues.jsonl --output output/correcoes
+rescore dataset-fix data/meu-conjunto --id meu-item --pack output/correcoes/review-pack.json --corrected output/correcoes/review-pack.mscz --reviewer "Nome"
 ```
 
 Use `rescore --help` ou `rescore <comando> --help` para ver todos os argumentos.
+
+## Corrigir somente os trechos duvidosos
+
+O ReScore pode transformar problemas estruturais ou leituras suspeitas em uma
+folha pequena de trabalho, sem exigir que o revisor procure o erro na grade inteira:
+
+```powershell
+rescore detect-issues output/minha-leitura/normalized.musicxml `
+  --output output/minha-leitura/issues
+
+rescore review-pack output/minha-leitura/normalized.musicxml `
+  --issues output/minha-leitura/issues/issues.jsonl `
+  --output output/minha-leitura/review-pack
+```
+
+O primeiro comando cria `issues.jsonl` e `issues.html`, com mensagens como
+“compasso 8, pauta 4, possível fagote”. O segundo gera:
+
+```text
+review-pack/
+  review-pack.mscz       arquivo que o músico corrige no MuseScore
+  review-pack.pdf        conferência visual em A4 paisagem
+  review-pack.musicxml   representação portátil
+  review-pack.json       mapa auditável para a partitura original
+```
+
+Cada compasso recebe um identificador visível como `RS-REVIEW-0001` e informa o
+compasso original, instrumento provável, pauta e tipo de dúvida. Não apague esse
+texto. Corrija somente as notas, pausas, vozes, claves, fórmulas, quiálteras ou
+outros elementos musicais e salve o `.mscz`.
+
+Quando a leitura pertencer a um item já cadastrado no dataset, importe o arquivo
+corrigido:
+
+```powershell
+rescore dataset-fix data/rescore-local `
+  --id minha-obra-pagina-1 `
+  --pack output/minha-leitura/review-pack/review-pack.json `
+  --corrected output/minha-leitura/review-pack/review-pack.mscz `
+  --reviewer "Nome do revisor" `
+  --note "Conferido contra o manuscrito"
+```
+
+O comando nunca sobrescreve o gabarito anterior. Ele cria uma correção versionada,
+guarda a previsão e a resposta humana, registra hashes e revisor, e marca a
+exportação de treino anterior como obsoleta. Na próxima exportação, a versão humana
+mais recente substitui somente os fluxos corrigidos. Consulte
+[Conjunto de dados](docs/DATASET.md#corrigir-trechos-suspeitos) para os critérios e
+arquivos de auditoria.
 
 ## Assistente `run.py`
 

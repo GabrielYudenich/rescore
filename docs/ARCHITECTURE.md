@@ -163,6 +163,28 @@ ao modelo de 35 partes, separa acordes de pautas monofônicas entre os executant
 valida todas as vozes em 4/4 e exporta `.mscz` e PDF A3 horizontal. Quebras de página
 são decisões de visualização; não criam novas partituras nem reiniciam a contagem.
 
+## Ciclo de correção humana
+
+A saída musical pode entrar em um ciclo auditável sem substituir a transcrição
+inteira:
+
+```text
+MusicXML candidato
+  → detector estrutural → issues.jsonl + issues.html
+  → seletor de trechos  → review-pack.mscz + mapa de origem
+  → edição no MuseScore → resposta humana identificada
+  → dataset-fix         → override versionado
+  → exportação de treino aplica somente os fluxos corrigidos
+```
+
+O pacote carrega atributos herdados, mas contém apenas partes e compassos afetados.
+Um identificador curto e visível associa o compasso isolado à origem. Na importação,
+hashes, contagem, identificadores, partes e limites do dataset são verificados antes
+de gravar qualquer histórico. O conteúdo de base é imutável; a correção mais recente
+prevalece somente na chave `compasso × parte × pauta`, carregando em conjunto suas
+vozes. Isso conserva tanto a
+previsão anterior quanto a resposta humana para aprendizado ativo e auditoria.
+
 ## Artefatos e retomada
 
 Cada etapa grava seus próprios artefatos e logs. Uma execução posterior reutiliza o

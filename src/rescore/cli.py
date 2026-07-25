@@ -12,7 +12,9 @@ from .dataset import (
     validate_dataset,
     write_public_catalog,
 )
+from .dataset_fix import apply_dataset_fix
 from .hardware import inspect_hardware
+from .issue_review import build_review_pack, detect_score_issues
 from .mscz import inspect_mscz
 from .musicxml import compare_scores, parse_musicxml, write_canonical
 from .normalize import build_normalized_musicxml
@@ -223,6 +225,35 @@ def build_parser() -> argparse.ArgumentParser:
     dataset_review.add_argument("--approve-measures", action="store_true")
     dataset_review.add_argument("--approve-staffs", action="store_true")
     dataset_review.add_argument("--note", default="")
+
+    detect_issues = subparsers.add_parser(
+        "detect-issues",
+        help="detecta compassos, vozes e quiálteras que exigem revisão",
+    )
+    detect_issues.add_argument("source", type=Path)
+    detect_issues.add_argument("--output", type=Path, default=Path("output/issues"))
+    detect_issues.add_argument("--meter", help="fórmula fixa opcional, por exemplo 4/4")
+
+    review_pack = subparsers.add_parser(
+        "review-pack",
+        help="gera MusicXML, MSCZ e PDF somente com os compassos problemáticos",
+    )
+    review_pack.add_argument("source", type=Path)
+    review_pack.add_argument("--output", type=Path, default=Path("output/review-pack"))
+    review_pack.add_argument("--issues", type=Path)
+    review_pack.add_argument("--meter", help="fórmula fixa opcional para detectar problemas")
+    review_pack.add_argument("--force", action="store_true")
+
+    dataset_fix = subparsers.add_parser(
+        "dataset-fix",
+        help="importa um pacote MuseScore corrigido como override humano versionado",
+    )
+    dataset_fix.add_argument("path", type=Path, help="raiz do dataset")
+    dataset_fix.add_argument("--id", required=True, dest="item_id")
+    dataset_fix.add_argument("--pack", type=Path, required=True)
+    dataset_fix.add_argument("--corrected", type=Path, required=True)
+    dataset_fix.add_argument("--reviewer", required=True)
+    dataset_fix.add_argument("--note", default="")
     return parser
 
 
@@ -339,6 +370,27 @@ def main(argv: list[str] | None = None) -> int:
                 reviewer=args.reviewer,
                 approve_measures=args.approve_measures,
                 approve_staffs=args.approve_staffs,
+                note=args.note,
+            )
+        elif args.command == "detect-issues":
+            result = detect_score_issues(args.source, args.output, meter=args.meter)
+        elif args.command == "review-pack":
+            result = build_review_pack(
+                project_root,
+                args.source,
+                args.output,
+                issues_path=args.issues,
+                meter=args.meter,
+                force=args.force,
+            )
+        elif args.command == "dataset-fix":
+            result = apply_dataset_fix(
+                project_root,
+                args.path,
+                item_id=args.item_id,
+                pack_path=args.pack,
+                corrected=args.corrected,
+                reviewer=args.reviewer,
                 note=args.note,
             )
         else:

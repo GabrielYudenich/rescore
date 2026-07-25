@@ -405,6 +405,18 @@ def validate_dataset(root: Path, *, verify_hashes: bool = True) -> dict[str, Any
         for name in ("index", "summary"):
             if isinstance(training.get(name), dict):
                 file_records.append(training[name])
+        for correction in item.get("corrections", []):
+            for name in (
+                "corrected_source",
+                "corrected_musicxml",
+                "pack",
+                "pack_musicxml",
+                "issues",
+                "overrides",
+                "comparison",
+            ):
+                if isinstance(correction.get(name), dict):
+                    file_records.append(correction[name])
         for record in file_records:
             relative = record.get("path", "")
             try:

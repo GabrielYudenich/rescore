@@ -152,6 +152,7 @@ def _build_target(
     measure: int,
     events: dict[tuple[str, str, int], list[dict[str, Any]]],
     meters: dict[tuple[str, int], str],
+    corrections: dict[tuple[str, str, int], str] | None = None,
 ) -> tuple[dict[str, Any], str]:
     streams = []
     for target in targets:
@@ -165,6 +166,7 @@ def _build_target(
                 "meter": meter,
                 "events": stream_events,
                 "tokens": tokenize_events(stream_events, meter),
+                "correction_id": (corrections or {}).get(key),
             }
         )
     if not streams:
@@ -189,6 +191,33 @@ def _build_target(
     }
     target["sha256"] = _hash_json(target)
     return target, relation
+
+
+def _apply_corrections(
+    dataset_root: Path,
+    item: dict[str, Any],
+    events: dict[tuple[str, str, int], list[dict[str, Any]]],
+    meters: dict[tuple[str, int], str],
+) -> dict[tuple[str, str, int], str]:
+    applied: dict[tuple[str, str, int], str] = {}
+    for correction in item.get("corrections", []):
+        if correction.get("status") != "human-corrected":
+            continue
+        record = correction.get("overrides")
+        if not isinstance(record, dict):
+            continue
+        payload = json.loads((dataset_root / record["path"]).read_text(encoding="utf-8"))
+        for override in payload.get("overrides", []):
+            key = (
+                override["target_part_id"],
+                str(override["target_staff"]),
+                int(override["original_measure"]),
+            )
+            events[key] = list(override["events"])
+            if override.get("meter"):
+                meters[(key[0], key[2])] = override["meter"]
+            applied[key] = correction["id"]
+    return applied
 
 
 def _eligibility(item: dict[str, Any], relation: str) -> tuple[bool, list[str]]:
@@ -236,6 +265,7 @@ def export_training_samples(
     score = parse_musicxml(score_path, include_rests=True)
     events = _event_lookup(score)
     meters = _effective_meters(score)
+    corrections = _apply_corrections(dataset_root, item, events, meters)
 
     export_dir = dataset_root / "items" / item_id / "training"
     image_dir = export_dir / "images"
@@ -273,7 +303,7 @@ def export_training_samples(
             image_path = image_dir / filename
             if not cv2.imwrite(str(image_path), crop):
                 raise OSError(f"não foi possível gravar: {image_path}")
-            target, relation = _build_target(band["targets"], measure, events, meters)
+            target, relation = _build_target(band["targets"], measure, events, meters, corrections)
             eligible, review_reasons = _eligibility(item, relation)
             relation_counts[relation] += 1
             eligibility_counts["eligible" if eligible else "review-required"] += 1

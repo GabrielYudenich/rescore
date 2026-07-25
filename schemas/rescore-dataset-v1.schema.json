@@ -374,6 +374,41 @@
             }
           }
         },
+        "corrections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "status",
+              "reviewer",
+              "created_at",
+              "corrected_source",
+              "corrected_musicxml",
+              "pack",
+              "pack_musicxml",
+              "issues",
+              "overrides",
+              "comparison"
+            ],
+            "properties": {
+              "id": {"type": "string"},
+              "status": {"const": "human-corrected"},
+              "reviewer": {"type": "string", "minLength": 1},
+              "created_at": {"type": "string", "format": "date-time"},
+              "note": {"type": "string"},
+              "changed_streams": {"type": "integer", "minimum": 0},
+              "confirmed_unchanged_streams": {"type": "integer", "minimum": 0},
+              "corrected_source": {"$ref": "#/$defs/file"},
+              "corrected_musicxml": {"$ref": "#/$defs/file"},
+              "pack": {"$ref": "#/$defs/file"},
+              "pack_musicxml": {"$ref": "#/$defs/file"},
+              "issues": {"$ref": "#/$defs/file"},
+              "overrides": {"$ref": "#/$defs/file"},
+              "comparison": {"$ref": "#/$defs/file"}
+            }
+          }
+        },
         "rights": {
           "type": "object",
           "required": [

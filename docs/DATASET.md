@@ -176,6 +176,74 @@ aprovados ou sejam aprovados na mesma chamada.
 Esse comando aprova a camada inteira. Se houver uma única caixa ou associação
 duvidosa, não a aprove ainda; a revisão granular será uma etapa posterior.
 
+## Corrigir trechos suspeitos
+
+Para uma correção musical localizada, não é necessário aprovar nem reescrever a
+página inteira. Primeiro gere a lista legível de suspeitas e o arquivo de trabalho:
+
+```powershell
+rescore detect-issues output/leitura.musicxml `
+  --output output/revisao/issues
+
+rescore review-pack output/leitura.musicxml `
+  --issues output/revisao/issues/issues.jsonl `
+  --output output/revisao/pack
+```
+
+`detect-issues` verifica, entre outros casos, vozes que ultrapassam ou não completam
+o compasso, início negativo, altura ausente e duração fracionária irregular sem
+quiáltera declarada. Uma suspeita não é automaticamente um erro musical; ela é uma
+tarefa prioritária para o revisor. O relatório HTML apresenta compasso, parte,
+instrumento provável, pauta, voz, instante e duração.
+
+`review-pack` seleciona somente os compassos e partes afetados. Ele recompõe os
+atributos herdados necessários para o trecho abrir isoladamente, preserva a música
+reconhecida e gera MusicXML, MuseScore, PDF A4 paisagem e um manifesto. Cada
+compasso de revisão possui um código visível `RS-REVIEW-NNNN`. Esse código deve
+permanecer no arquivo corrigido, pois impede que uma mudança de ordem seja aplicada
+ao compasso errado.
+
+Depois de conferir o manuscrito ou a edição fonte no MuseScore, salve o arquivo e
+importe a resposta humana:
+
+```powershell
+rescore dataset-fix data/rescore-local `
+  --id exemplo-pagina-1 `
+  --pack output/revisao/pack/review-pack.json `
+  --corrected output/revisao/pack/review-pack.mscz `
+  --reviewer "Nome do revisor" `
+  --note "Alturas, ritmo e quiáltera conferidos"
+```
+
+Antes de alterar o manifesto, o comando confirma:
+
+- hashes do pacote original e da lista de problemas;
+- identidade exata entre a partitura-base do pacote e o gabarito do item;
+- quantidade de compassos;
+- permanência e posição de todos os identificadores;
+- correspondência inequívoca das partes por ID ou nome;
+- existência das partes e compassos originais no gabarito do item.
+
+Cada execução cria `items/<id>/corrections/correction-<UTC>/` com o `.mscz` recebido,
+MusicXML exportado, pacote preservado, problemas originais, diferenças por fluxo e
+`overrides.json`. O gabarito de base nunca é sobrescrito. Correções novas são
+acrescentadas ao histórico e a mais recente prevalece apenas para a combinação
+`compasso × parte × pauta` corrigida, incluindo todas as vozes dessa pauta para
+preservar sua relação polifônica. `dataset-export-training` aplica esses
+overrides e registra `correction_id` no alvo supervisionado, mantendo a origem de
+cada resposta auditável. A cópia do manifesto também remove caminhos absolutos da
+máquina do revisor antes de entrar no dataset.
+
+A exportação anterior é marcada como obsoleta. Rode novamente:
+
+```powershell
+rescore dataset-export-training data/rescore-local --id exemplo-pagina-1 --force
+rescore dataset-validate data/rescore-local
+```
+
+Não use `dataset-fix` para uma sugestão ainda não conferida. A importação declara
+que o conteúdo corrigido foi comparado por uma pessoa com a fonte musical.
+
 ## Campos importantes
 
 - `source_type`: `printed`, `handwritten` ou `mixed`;
@@ -191,6 +259,7 @@ duvidosa, não a aprove ainda; a revisão granular será uma etapa posterior.
 - `alignment.staff_regions_file`: pautas, alvos MusicXML e células compasso × pauta;
 - `training.index`: índice JSONL dos recortes e alvos supervisionados;
 - `training.eligible_sample_count`: quantidade liberada pela política de revisão;
+- `corrections`: histórico imutável das correções musicais localizadas;
 - `verification`: quanto da transcrição foi revisado;
 - `writer`: copista ou mão, quando conhecida;
 - `checksums`: integridade dos arquivos.

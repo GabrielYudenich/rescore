@@ -107,8 +107,12 @@ mantêm a proposta da máquina separada de uma confirmação humana. O próximo
 incremento é ampliar o vocabulário de notação e criar divisões por obra/copista.
 
 A aprovação auditável de camadas completas também está disponível em
-`dataset-review`. Ainda falta revisão granular de caixas e relações individuais;
-uma dúvida isolada não deve obrigar o revisor a aceitar a página inteira.
+`dataset-review`. A primeira revisão musical granular também está disponível:
+`detect-issues` cria a fila estrutural, `review-pack` produz um `.mscz` compacto com
+identificadores persistentes e `dataset-fix` registra a resposta humana como um
+override versionado. Uma dúvida isolada já pode ser corrigida sem substituir o
+gabarito inteiro. Ainda faltam edição geométrica de caixas individuais e incerteza
+produzida diretamente pelo futuro modelo neural, em vez de apenas regras musicais.
 
 ### Fase 2 — modelo-base por pauta
 
