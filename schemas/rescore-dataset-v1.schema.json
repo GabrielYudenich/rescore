@@ -315,6 +315,9 @@
               "items": {
                 "$ref": "#/$defs/file"
               }
+            },
+            "review_log": {
+              "$ref": "#/$defs/file"
             }
           }
         },
@@ -356,6 +359,16 @@
               "$ref": "#/$defs/file"
             },
             "updated_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "stale": {
+              "type": "boolean"
+            },
+            "stale_reason": {
+              "type": "string"
+            },
+            "stale_at": {
               "type": "string",
               "format": "date-time"
             }

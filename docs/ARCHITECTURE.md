@@ -38,6 +38,8 @@ PDF
   associa perfis condensados às partes MusicXML sem reconhecer notas;
 - `training_export.py`: recorta células compasso × pauta, serializa alvos MusicXML
   e impede que propostas não revisadas sejam usadas como verdade de treino;
+- `review.py`: promove camadas completas após revisão humana, registra auditoria
+  e invalida exportações supervisionadas antigas;
 - `tooling.py`: localiza Audiveris e MuseScore.
 
 ## Alinhamento supervisionado

@@ -18,6 +18,7 @@ from .musicxml import compare_scores, parse_musicxml, write_canonical
 from .normalize import build_normalized_musicxml
 from .pdf import pdf_info, render_pages
 from .pipeline import convert
+from .review import review_dataset_alignment
 from .staff_alignment import align_dataset_staffs, validate_staff_alignment
 from .tooling import doctor
 from .training_export import export_training_samples, validate_training_export
@@ -211,6 +212,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     training_export_validate.add_argument("path", type=Path)
     training_export_validate.add_argument("--skip-hashes", action="store_true")
+
+    dataset_review = subparsers.add_parser(
+        "dataset-review",
+        help="aprova alinhamentos completos e registra uma trilha de auditoria",
+    )
+    dataset_review.add_argument("path", type=Path)
+    dataset_review.add_argument("--id", required=True, dest="item_id")
+    dataset_review.add_argument("--reviewer", required=True)
+    dataset_review.add_argument("--approve-measures", action="store_true")
+    dataset_review.add_argument("--approve-staffs", action="store_true")
+    dataset_review.add_argument("--note", default="")
     return parser
 
 
@@ -320,6 +332,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "training-export-validate":
             result = validate_training_export(args.path, verify_hashes=not args.skip_hashes)
+        elif args.command == "dataset-review":
+            result = review_dataset_alignment(
+                args.path,
+                item_id=args.item_id,
+                reviewer=args.reviewer,
+                approve_measures=args.approve_measures,
+                approve_staffs=args.approve_staffs,
+                note=args.note,
+            )
         else:
             parser.error(f"comando desconhecido: {args.command}")
             return 2

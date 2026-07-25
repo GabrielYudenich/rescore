@@ -106,6 +106,10 @@ preserva linhas vazias e registra relações condensadas com partes MusicXML;
 mantêm a proposta da máquina separada de uma confirmação humana. O próximo
 incremento é ampliar o vocabulário de notação e criar divisões por obra/copista.
 
+A aprovação auditável de camadas completas também está disponível em
+`dataset-review`. Ainda falta revisão granular de caixas e relações individuais;
+uma dúvida isolada não deve obrigar o revisor a aceitar a página inteira.
+
 ### Fase 2 — modelo-base por pauta
 
 - vocabulário de tokens;

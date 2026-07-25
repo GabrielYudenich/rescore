@@ -127,6 +127,7 @@ rescore dataset-align-staffs data/meu-conjunto --id meu-item --profile auto
 rescore staff-alignment-validate data/meu-conjunto/items/meu-item/alignment/staff-regions.json
 rescore dataset-export-training data/meu-conjunto --id meu-item
 rescore training-export-validate data/meu-conjunto/items/meu-item/training/samples.jsonl
+rescore dataset-review data/meu-conjunto --id meu-item --reviewer "Nome" --approve-measures --approve-staffs
 ```
 
 Use `rescore --help` ou `rescore <comando> --help` para ver todos os argumentos.

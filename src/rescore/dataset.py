@@ -395,6 +395,7 @@ def validate_dataset(root: Path, *, verify_hashes: bool = True) -> dict[str, Any
             "review_html",
             "staff_regions_file",
             "staff_review_html",
+            "review_log",
         ):
             if isinstance(alignment.get(name), dict):
                 file_records.append(alignment[name])

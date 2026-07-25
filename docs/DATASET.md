@@ -153,6 +153,29 @@ quando o gabarito é humano e os alinhamentos de compassos e pautas estão marca
 como `human-reviewed`. Os demais exemplos continuam úteis para a fila de revisão,
 mas não entram silenciosamente no modelo.
 
+## Registrar revisão humana
+
+Depois de conferir integralmente os dois HTMLs de revisão, uma pessoa pode aprovar
+as camadas completas com identificação explícita:
+
+```powershell
+rescore dataset-review data/rescore-local `
+  --id exemplo-pagina-1 `
+  --reviewer "Nome do revisor" `
+  --approve-measures `
+  --approve-staffs `
+  --note "Conferido compasso por compasso e pauta por pauta"
+```
+
+O comando valida os arquivos antes de alterá-los, grava revisor, instante UTC e
+observação em `reviews.jsonl`, atualiza checksums e marca qualquer exportação de
+treino anterior como obsoleta. Depois da aprovação, execute novamente
+`dataset-export-training --force`. Aprovar pautas exige que os compassos já estejam
+aprovados ou sejam aprovados na mesma chamada.
+
+Esse comando aprova a camada inteira. Se houver uma única caixa ou associação
+duvidosa, não a aprove ainda; a revisão granular será uma etapa posterior.
+
 ## Campos importantes
 
 - `source_type`: `printed`, `handwritten` ou `mixed`;
