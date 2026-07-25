@@ -99,10 +99,11 @@ Assim o esforço humano melhora diretamente as versões seguintes.
 - editor simples para confirmar ou corrigir;
 - exportar recortes pareados.
 
-O primeiro incremento desta fase já existe no comando `dataset-align`: ele cobre
-alinhamento página-compasso, valida a sequência e mantém a proposta separada de uma
-confirmação humana. O próximo incremento é subdividir cada compasso por pauta e
-associá-lo à parte MusicXML correspondente.
+Os dois primeiros incrementos já existem. `dataset-align` cobre o alinhamento
+página–compasso; `dataset-align-staffs` subdivide cada compasso por pauta física,
+preserva linhas vazias e registra relações condensadas com partes MusicXML. Ambos
+mantêm a proposta da máquina separada de uma confirmação humana. O próximo
+incremento é renderizar o gabarito por pauta e exportar pares visuais/tokens.
 
 ### Fase 2 — modelo-base por pauta
 

@@ -29,6 +29,9 @@ data/meu-conjunto/
         measure-regions.json
         page-0001-overlay.jpg
         review.html
+        staff-regions.json
+        page-0001-staff-overlay.jpg
+        staff-review.html
   public-catalog.json
 ```
 
@@ -97,6 +100,30 @@ As imagens de sobreposição devem ser conferidas antes do treino. O algoritmo
 prefere o início real do sistema para que o primeiro compasso conserve clave,
 armadura e fórmula de compasso, evitando começar sobre uma haste alinhada.
 
+## Alinhar pautas e instrumentos
+
+Com os compassos alinhados, a segunda passagem subdivide a página em pautas e
+cria uma célula para cada par `compasso × pauta`:
+
+```powershell
+rescore dataset-align-staffs data/rescore-local `
+  --id exemplo-pagina-1 `
+  --profile auto
+
+rescore staff-alignment-validate `
+  data/rescore-local/items/exemplo-pagina-1/alignment/staff-regions.json
+```
+
+Os perfis atuais cobrem `menina-opening` e `choros9-opening`. Eles preservam
+pautas impressas vazias como `unassigned`, permitem que uma pauta condensada
+aponte para várias partes MusicXML e distinguem as duas pautas de instrumentos
+como celesta, harpa e piano. No Choros, a linha de percussão é mantida como
+`one-line`, em vez de ser confundida com a celesta.
+
+O arquivo `staff-regions.json` continua com `review_status=machine-proposed`.
+Os nomes e alvos são hipóteses estruturais do perfil e precisam ser conferidos
+no `staff-review.html`; eles ainda não são anotações musicais aprovadas.
+
 ## Campos importantes
 
 - `source_type`: `printed`, `handwritten` ou `mixed`;
@@ -109,6 +136,7 @@ armadura e fórmula de compasso, evitando começar sobre uma haste alinhada.
 - `alignment.status`: `verified`, `inferred` ou `unassigned`;
 - `alignment.review_status`: proposta da máquina ou revisão humana;
 - `alignment.regions_file`: caixas de compassos e métricas geométricas;
+- `alignment.staff_regions_file`: pautas, alvos MusicXML e células compasso × pauta;
 - `verification`: quanto da transcrição foi revisado;
 - `writer`: copista ou mão, quando conhecida;
 - `checksums`: integridade dos arquivos.

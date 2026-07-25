@@ -285,6 +285,36 @@
               "items": {
                 "$ref": "#/$defs/file"
               }
+            },
+            "staff_review_status": {
+              "enum": [
+                "machine-proposed",
+                "human-reviewed"
+              ]
+            },
+            "staff_profile": {
+              "type": "string",
+              "minLength": 1
+            },
+            "staff_region_count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "staff_cell_count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "staff_regions_file": {
+              "$ref": "#/$defs/file"
+            },
+            "staff_review_html": {
+              "$ref": "#/$defs/file"
+            },
+            "staff_preview_images": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/file"
+              }
             }
           }
         },

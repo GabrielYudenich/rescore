@@ -18,6 +18,7 @@ from .musicxml import compare_scores, parse_musicxml, write_canonical
 from .normalize import build_normalized_musicxml
 from .pdf import pdf_info, render_pages
 from .pipeline import convert
+from .staff_alignment import align_dataset_staffs, validate_staff_alignment
 from .tooling import doctor
 
 
@@ -175,6 +176,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="valida cobertura e caixas de um measure-regions.json",
     )
     alignment_validate.add_argument("path", type=Path)
+
+    dataset_align_staffs = subparsers.add_parser(
+        "dataset-align-staffs",
+        help="propõe pautas visuais, instrumentos e células compasso × pauta",
+    )
+    dataset_align_staffs.add_argument("path", type=Path)
+    dataset_align_staffs.add_argument("--id", required=True, dest="item_id")
+    dataset_align_staffs.add_argument(
+        "--profile",
+        choices=("auto", "menina-opening", "choros9-opening"),
+        default="auto",
+    )
+    dataset_align_staffs.add_argument("--force", action="store_true")
+
+    staff_alignment_validate = subparsers.add_parser(
+        "staff-alignment-validate",
+        help="valida pautas e células de um staff-regions.json",
+    )
+    staff_alignment_validate.add_argument("path", type=Path)
     return parser
 
 
@@ -267,6 +287,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "alignment-validate":
             result = validate_alignment(args.path)
+        elif args.command == "dataset-align-staffs":
+            result = align_dataset_staffs(
+                args.path,
+                item_id=args.item_id,
+                profile=args.profile,
+                force=args.force,
+            )
+        elif args.command == "staff-alignment-validate":
+            result = validate_staff_alignment(args.path)
         else:
             parser.error(f"comando desconhecido: {args.command}")
             return 2

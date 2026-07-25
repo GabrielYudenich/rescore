@@ -34,6 +34,8 @@ PDF
 - `mscz.py`: inspeciona e valida a estrutura interna do arquivo MuseScore;
 - `dataset.py`: importa pares supervisionados e impede vazamento de itens privados;
 - `alignment.py`: detecta barras, propõe regiões de compassos e gera revisão visual;
+- `staff_alignment.py`: detecta a extensão do sistema, divide pautas físicas e
+  associa perfis condensados às partes MusicXML sem reconhecer notas;
 - `tooling.py`: localiza Audiveris e MuseScore.
 
 ## Alinhamento supervisionado
@@ -48,6 +50,12 @@ Cada região recebe número de compasso, caixa em pixels e caixa normalizada. Um
 imagem transparente de sobreposição e um HTML local permitem verificar a proposta.
 O estado inicial é sempre `machine-proposed`; passar nas verificações geométricas
 não equivale a revisão musical humana.
+
+A etapa seguinte encontra a espinha vertical contínua de uma barra já confirmada,
+estima o espaçamento entre as cinco linhas e cria bandas sem depender da densidade
+das notas. Perfis explícitos representam instrumentos condensados com vários
+alvos, pautas de teclado por número e linhas de percussão de uma linha. A grade
+resultante contém uma célula normalizada para cada `compasso × pauta`.
 
 ## PDF digital
 

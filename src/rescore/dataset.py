@@ -390,10 +390,16 @@ def validate_dataset(root: Path, *, verify_hashes: bool = True) -> dict[str, Any
             if isinstance(ground_truth.get(name), dict):
                 file_records.append(ground_truth[name])
         alignment = item.get("alignment", {})
-        for name in ("regions_file", "review_html"):
+        for name in (
+            "regions_file",
+            "review_html",
+            "staff_regions_file",
+            "staff_review_html",
+        ):
             if isinstance(alignment.get(name), dict):
                 file_records.append(alignment[name])
         file_records.extend(alignment.get("preview_images", []))
+        file_records.extend(alignment.get("staff_preview_images", []))
         for record in file_records:
             relative = record.get("path", "")
             try:

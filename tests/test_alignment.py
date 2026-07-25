@@ -13,6 +13,12 @@ from rescore.alignment import (
     validate_alignment,
 )
 from rescore.dataset import add_pair, initialize_dataset, validate_dataset
+from rescore.staff_alignment import (
+    PageProfile,
+    StaffSpec,
+    detect_staff_regions,
+    validate_staff_alignment,
+)
 
 
 def _write_score_image(path: Path, boundaries: list[int]) -> None:
@@ -68,6 +74,44 @@ def test_detect_measure_regions_numbers_regular_barlines(tmp_path: Path) -> None
     for actual, expected in zip(result["boundaries_x"], boundaries, strict=True):
         assert abs(actual - expected) <= 8
     assert result["metrics"]["confidence"] > 0.7
+
+
+def test_detect_staff_regions_builds_complete_measure_grid(tmp_path: Path) -> None:
+    image = tmp_path / "page.png"
+    boundaries = [150, 440, 735, 1050]
+    _write_score_image(image, boundaries)
+    measures = detect_measure_regions(image, expected_measures=3, first_measure=12)
+    profile = PageProfile(
+        tuple(
+            StaffSpec(
+                f"Staff {index}",
+                (("P1", "1"), ("P2", "1")) if index == 1 else (),
+            )
+            for index in range(1, 10)
+        )
+    )
+    result = detect_staff_regions(
+        image,
+        measures,
+        profile,
+        {
+            "P1": {"name": "Flute 1", "staves": 1},
+            "P2": {"name": "Flute 2", "staves": 1},
+        },
+    )
+    assert len(result["staff_bands"]) == 9
+    assert len(result["cells"]) == 27
+    assert result["staff_bands"][0]["mapping_status"] == "profile-proposed"
+    assert len(result["staff_bands"][0]["targets"]) == 2
+    assert result["staff_bands"][1]["mapping_status"] == "unassigned"
+
+    payload = {
+        "schema_version": "1.0",
+        "pages": [{"image_page": 1, **result}],
+    }
+    path = tmp_path / "staff-regions.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert validate_staff_alignment(path)["valid"]
 
 
 def test_align_dataset_item_writes_reviewable_private_artifacts(tmp_path: Path) -> None:
