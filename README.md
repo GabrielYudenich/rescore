@@ -27,6 +27,20 @@ errar alturas, acidentes, vozes, quiálteras, letras e a associação entre paut
 Todo o processamento é local. O ReScore não envia a partitura para um serviço
 externo.
 
+## Direção do projeto
+
+O pipeline existente é a camada de produção e validação. A evolução planejada é
+um sistema de reconhecimento de música treinável pela comunidade, especialmente
+para manuscritos e grades orquestrais históricas. Ele não depende de Ollama nem de
+um modelo de linguagem: a arquitetura usa visão computacional, modelos musicais e
+restrições simbólicas próprias para partitura.
+
+Uma imagem, sozinha, não ensina ao modelo qual era a resposta correta. Por isso o
+novo formato de conjunto de dados guarda pares auditáveis de imagem e MusicXML
+revisado, com alinhamento de compassos, procedência, licença, nível de revisão e
+hashes. Consulte [Conjunto de dados](docs/DATASET.md) e
+[Roteiro da IA](docs/ROADMAP_AI.md).
+
 ## Requisitos
 
 - Python 3.11 ou mais recente;
@@ -101,9 +115,12 @@ Outros comandos:
 
 ```text
 rescore doctor
+rescore hardware
 rescore inspect-mscz arquivo.mscz
 rescore canonicalize arquivo.mxl --output partitura.json
 rescore normalize-scherzo candidato.mxl modelo.musicxml
+rescore dataset-init data/meu-conjunto
+rescore dataset-validate data/meu-conjunto
 ```
 
 Use `rescore --help` ou `rescore <comando> --help` para ver todos os argumentos.
@@ -246,3 +263,15 @@ python -m compileall -q src run.py
 Partituras, PDFs, imagens de referência, projetos OMR/MuseScore, saídas e anotações
 locais são ignorados pelo Git. Os testes que dependem de uma referência privada são
 automaticamente ignorados quando ela não está presente.
+
+## Licença e dados
+
+O código do ReScore é distribuído sob
+[GNU AGPL-3.0-or-later](LICENSE). A licença do código não concede direitos sobre
+partituras, fotografias, transcrições ou pesos treinados. Cada contribuição de
+dados precisa declarar sua própria procedência e permissão de redistribuição.
+
+O GitHub deve armazenar código, esquemas, documentação e pequenos catálogos. Imagens
+e MusicXML de treinamento ficam fora do histórico Git e só podem ser publicados
+por um repositório de dados quando o manifesto autorizar explicitamente. Veja
+[Política de dados](DATA_POLICY.md) e [Como contribuir](CONTRIBUTING.md).
