@@ -216,6 +216,7 @@ tempCodeRunnerFile.py
 /tools/
 /data/
 /models/
+/projects/
 *.omr
 *.onnx
 *.safetensors

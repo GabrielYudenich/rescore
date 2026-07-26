@@ -14,6 +14,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from .instruments import canonical_instrument_label, identify_instrument
 from .mscz import set_page_layout
 from .musicxml import _read_musicxml, _strip_namespaces, parse_musicxml
 from .normalize import validate_meter_score
@@ -124,6 +125,18 @@ def _write_issue_html(source: Path, issues: list[dict[str, Any]], output: Path) 
         </tr></thead><tbody>{"".join(rows)}</tbody></table></body></html>""",
         encoding="utf-8",
     )
+
+
+def _normalize_issue_instrument(issue: dict[str, Any]) -> None:
+    raw_instrument = issue.get("instrument_raw") or issue["possible_instrument"]
+    identity = identify_instrument(raw_instrument)
+    issue["instrument_raw"] = raw_instrument
+    issue["possible_instrument"] = canonical_instrument_label(raw_instrument)
+    if identity is not None:
+        issue["instrument_id"] = identity["id"]
+        issue["instrument_family"] = identity["family"]
+        issue["instrument_abbreviation"] = identity["abbreviation_pt"]
+        issue["instrument_match_confidence"] = identity["confidence"]
 
 
 def detect_score_issues(
@@ -254,6 +267,7 @@ def detect_score_issues(
                     }
                 )
     for issue in issues:
+        _normalize_issue_instrument(issue)
         issue["id"] = _issue_id(
             int(issue["measure"]),
             issue["part_id"],
@@ -300,6 +314,7 @@ def _load_issues(path: Path) -> list[dict[str, Any]]:
         issue.setdefault("voice", "1")
         issue.setdefault("kind", "manual-review")
         issue.setdefault("severity", "warning")
+        _normalize_issue_instrument(issue)
         issue.setdefault(
             "id",
             _issue_id(

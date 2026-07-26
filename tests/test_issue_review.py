@@ -85,7 +85,9 @@ def test_detect_score_issues_reports_overfull_voice(tmp_path: Path) -> None:
     overfull = [issue for issue in issues if issue["kind"] == "measure-long"]
     assert len(overfull) == 1
     assert overfull[0]["measure"] == 2
-    assert overfull[0]["possible_instrument"] == "Bassoon"
+    assert overfull[0]["possible_instrument"] == "Fagote"
+    assert overfull[0]["instrument_raw"] == "Bassoon"
+    assert overfull[0]["instrument_id"] == "bassoon"
     assert "encontrado 5" in overfull[0]["message"]
     assert Path(result["html"]).is_file()
 

@@ -95,7 +95,29 @@ conferir, no mínimo:
 - duplicações orquestrais;
 - letras e sua associação às notas.
 
-## 7. Processar uma grade escaneada
+## 7. Organizar uma geração para revisão
+
+Antes de iniciar uma nova obra, também é possível organizar uma geração existente:
+
+```powershell
+rescore project-review "Choros 9 - páginas 3 a 6" `
+  --score output/choros/continuous/choros9-continuous.musicxml `
+  --musescore output/choros/continuous/choros9-continuous.mscz `
+  --score-pdf output/choros/continuous/choros9-continuous-A3.pdf `
+  --source-pdf "Choros N9 (Grade).pdf" `
+  --pages 3-6 `
+  --artifacts-dir output/choros/continuous
+```
+
+A execução aparece em `projects/`, com um índice HTML, a partitura editável, o PDF,
+os logs originais e um ou mais pacotes de correção. Use `--batch-size` para limitar
+quantos compassos suspeitos entram em cada pacote. O PDF fonte não é duplicado.
+
+Se `rescore` não estiver no `PATH` do PowerShell, ative o ambiente e use o executável
+diretamente, por exemplo `.\.venv\Scripts\rescore.exe doctor`, ou reinstale o projeto
+com `.\.venv\Scripts\python.exe -m pip install -e .`.
+
+## 8. Processar uma grade escaneada
 
 O assistente inclui um perfil experimental:
 

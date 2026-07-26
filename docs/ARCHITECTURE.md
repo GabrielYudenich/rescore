@@ -40,6 +40,12 @@ PDF
   e impede que propostas não revisadas sejam usadas como verdade de treino;
 - `review.py`: promove camadas completas após revisão humana, registra auditoria
   e invalida exportações supervisionadas antigas;
+- `instruments.py`: resolve nomes, abreviações, números de executantes, pautas de
+  teclado e trocas instrumentais em vários idiomas;
+- `issue_review.py`: detecta suspeitas estruturais e cria formulários métricos
+  vazios para correção no MuseScore;
+- `projects.py`: cria execuções locais imutáveis com entregas, logs, diagnósticos e
+  pacotes de correção;
 - `tooling.py`: localiza Audiveris e MuseScore.
 
 ## Alinhamento supervisionado
@@ -199,6 +205,13 @@ melhorar a normalização sem executar novamente a etapa mais demorada.
 O manifesto registra caminhos, ferramentas, páginas, parâmetros e resumo de
 qualidade. Os relatórios de auditoria explicam por que um arquivo foi aceito ou
 rejeitado.
+
+Uma geração pronta pode ser promovida a projeto de revisão. O diretório
+`projects/<slug>/runs/<UTC>/` é imutável e guarda cópias das entregas, problemas,
+formulários e logs; `project.json` aponta para a execução mais recente. A fonte PDF
+não é copiada e o diretório inteiro é ignorado pelo Git. O índice HTML diferencia
+erros estruturalmente localizados de diagnósticos de estágios anteriores, como
+grupos de acordes ambíguos ou alturas removidas por uma regra de tocabilidade.
 
 ## Limite do sistema
 

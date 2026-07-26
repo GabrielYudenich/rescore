@@ -14,12 +14,19 @@ from .dataset import (
 )
 from .dataset_fix import apply_dataset_fix
 from .hardware import inspect_hardware
+from .instruments import (
+    canonical_instrument_label,
+    identify_instrument,
+    identify_instruments,
+    instrument_catalog,
+)
 from .issue_review import build_review_pack, detect_score_issues
 from .mscz import inspect_mscz
 from .musicxml import compare_scores, parse_musicxml, write_canonical
 from .normalize import build_normalized_musicxml
 from .pdf import pdf_info, render_pages
 from .pipeline import convert
+from .projects import create_review_project
 from .review import review_dataset_alignment
 from .staff_alignment import align_dataset_staffs, validate_staff_alignment
 from .tooling import doctor
@@ -265,6 +272,33 @@ def build_parser() -> argparse.ArgumentParser:
     review_pack.add_argument("--meter", help="fórmula fixa opcional para detectar problemas")
     review_pack.add_argument("--force", action="store_true")
 
+    instrument = subparsers.add_parser(
+        "instrument",
+        help="resolve um nome ou uma abreviação instrumental multilíngue",
+    )
+    instrument.add_argument("name")
+
+    instrument_catalog_parser = subparsers.add_parser(
+        "instrument-catalog",
+        help="exibe o dicionário interno de instrumentos e abreviações",
+    )
+    instrument_catalog_parser.add_argument("--output", type=Path)
+
+    project_review = subparsers.add_parser(
+        "project-review",
+        help="organiza uma geração, os logs e os pacotes de correção em projects/",
+    )
+    project_review.add_argument("name")
+    project_review.add_argument("--score", type=Path, required=True)
+    project_review.add_argument("--musescore", type=Path)
+    project_review.add_argument("--score-pdf", type=Path)
+    project_review.add_argument("--source-pdf", type=Path)
+    project_review.add_argument("--pages", help="páginas da fonte, por exemplo 7-41")
+    project_review.add_argument("--artifacts-dir", type=Path)
+    project_review.add_argument("--output", type=Path, default=Path("projects"))
+    project_review.add_argument("--batch-size", type=int, default=20)
+    project_review.add_argument("--meter", help="fórmula fixa opcional, por exemplo 4/4")
+
     dataset_fix = subparsers.add_parser(
         "dataset-fix",
         help="importa um pacote MuseScore corrigido como override humano versionado",
@@ -415,6 +449,39 @@ def main(argv: list[str] | None = None) -> int:
                 issues_path=args.issues,
                 meter=args.meter,
                 force=args.force,
+            )
+        elif args.command == "instrument":
+            identity = identify_instrument(args.name)
+            identities = identify_instruments(args.name)
+            result = {
+                "source": args.name,
+                "canonical_name": canonical_instrument_label(args.name),
+                "recognized": identity is not None,
+                "identity": identity,
+                "identities": identities,
+            }
+        elif args.command == "instrument-catalog":
+            result = {"count": len(instrument_catalog()), "instruments": instrument_catalog()}
+            if args.output:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                args.output.write_text(
+                    json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                result["output"] = str(args.output.resolve())
+        elif args.command == "project-review":
+            result = create_review_project(
+                project_root,
+                name=args.name,
+                score=args.score,
+                output_root=args.output,
+                musescore_score=args.musescore,
+                score_pdf=args.score_pdf,
+                source_pdf=args.source_pdf,
+                pages=args.pages,
+                artifacts_dir=args.artifacts_dir,
+                batch_size=args.batch_size,
+                meter=args.meter,
             )
         elif args.command == "dataset-fix":
             result = apply_dataset_fix(

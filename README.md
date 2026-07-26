@@ -23,6 +23,9 @@ errar alturas, acidentes, vozes, quiálteras, letras e a associação entre paut
 - auditoria de compassos e vozes antes de entregar o arquivo;
 - fila de correção assistida: detecta trechos suspeitos, cria um `.mscz` curto para
   edição humana e devolve as correções versionadas ao conjunto de dados;
+- projetos de revisão locais com entregas, logs, relatório HTML e execuções imutáveis;
+- dicionário instrumental multilíngue para nomes e abreviações em português,
+  francês, inglês e italiano;
 - relatórios JSON com artefatos, métricas e avisos;
 - reaproveitamento de resultados intermediários em novas execuções.
 
@@ -132,10 +135,52 @@ rescore training-export-validate data/meu-conjunto/items/meu-item/training/sampl
 rescore dataset-review data/meu-conjunto --id meu-item --reviewer "Nome" --approve-measures --approve-staffs
 rescore detect-issues candidato.musicxml --output output/problemas
 rescore review-pack candidato.musicxml --issues output/problemas/issues.jsonl --output output/correcoes
+rescore instrument "Célesta — portée inférieure"
+rescore instrument-catalog --output output/instrumentos.json
+rescore project-review "Minha obra" --score candidato.musicxml --source-pdf fonte.pdf --pages 3-6
 rescore dataset-fix data/meu-conjunto --id meu-item --pack output/correcoes/review-pack.json --corrected output/correcoes/review-pack.mscz --reviewer "Nome"
 ```
 
 Use `rescore --help` ou `rescore <comando> --help` para ver todos os argumentos.
+
+## Organizar uma geração para revisão
+
+`project-review` reúne uma geração já concluída em `projects/<obra>/runs/<data-UTC>/`.
+Cada execução é preservada, portanto uma nova análise não sobrescreve a anterior:
+
+```powershell
+rescore project-review "Sinfonia - primeiro movimento" `
+  --score output/movimento/normalized.musicxml `
+  --musescore output/movimento/normalized.mscz `
+  --score-pdf output/movimento/normalized.pdf `
+  --source-pdf "fonte.pdf" `
+  --pages 7-41 `
+  --artifacts-dir output/movimento
+```
+
+Abra o `index.html` da execução indicada por `latest_run` em `project.json`. A pasta
+contém `entrada/`, `entregas/`, `issues/`, `correcoes/` e `logs/`, além de um
+`run.json` com caminhos, hashes e contagens. O PDF fonte não é copiado: somente o
+caminho local, o tamanho e o hash entram no manifesto. `projects/` é ignorada pelo
+Git para evitar publicar partituras ou fontes particulares por acidente.
+
+O painel separa problemas estruturais — que geram pacote de correção — de
+diagnósticos anteriores da normalização. Por exemplo, acordes ambíguos e alturas
+descartadas por uma regra de tocabilidade permanecem visíveis no relatório, mesmo
+quando ainda não existe associação segura o bastante para criar um formulário
+automaticamente.
+
+O dicionário pode ser consultado sem processar uma partitura:
+
+```powershell
+rescore instrument "Cors 1-2 (Fa)"
+rescore instrument "Flauta III / Piccolo I"
+rescore instrument-catalog --output output/dicionario-instrumentos.json
+```
+
+Nomes combinados preservam os dois papéis, por exemplo `Flauta III / Flautim I`.
+O nome original também fica em `instrumentos.json`; a normalização nunca apaga a
+forma lida na fonte.
 
 ## Corrigir somente os trechos duvidosos
 
