@@ -188,6 +188,24 @@ mais recente substitui somente os fluxos corrigidos. Consulte
 [Conjunto de dados](docs/DATASET.md#corrigir-trechos-suspeitos) para os critérios e
 arquivos de auditoria.
 
+Se a leitura automática e o gabarito usam IDs instrumentais diferentes, declare a
+correspondência explicitamente. Se o MuseScore removeu todos os textos `RS-REVIEW-*`
+ao substituir as pausas, `--confirm-order` registra que o revisor confirmou a ordem:
+
+```powershell
+rescore dataset-fix data/rescore-local `
+  --id minha-obra-pagina-1 `
+  --pack output/revisao/pack/review-pack.json `
+  --corrected output/revisao/pack/review-pack.mscz `
+  --reviewer "Nome do revisor" `
+  --map P17:1=P29:2 `
+  --confirm-order
+```
+
+Sem essas confirmações explícitas, o importador recusa bases diferentes, IDs
+ausentes ou destinos ambíguos para impedir que notas sejam ensinadas ao instrumento
+errado.
+
 ## Assistente `run.py`
 
 O arquivo `run.py` oferece um fluxo interativo e perfis experimentais para os casos

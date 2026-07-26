@@ -205,6 +205,21 @@ compasso de revisão possui um código visível `RS-REVIEW-NNNN`. Esse código d
 permanecer no arquivo corrigido, pois impede que uma mudança de ordem seja aplicada
 ao compasso errado.
 
+Algumas grades automáticas usam uma parte por pauta visual, enquanto o gabarito usa
+partes expandidas. Nesses casos, IDs iguais podem até significar instrumentos
+diferentes. `dataset-fix` compara o hash da partitura-base e exige um mapeamento
+explícito para cada pauta quando ele difere:
+
+```powershell
+--map P17:1=P29:2
+```
+
+O lado esquerdo é `parte:pauta` no pacote; o direito é o destino no dataset. Mais de
+uma origem não pode apontar silenciosamente para o mesmo destino. Se todos os textos
+identificadores desaparecerem durante a edição, `--confirm-order` permite usar a
+ordem somente após confirmação humana. IDs parcialmente presentes ou deslocados
+continuam sendo rejeitados.
+
 Depois de conferir o manuscrito ou a edição fonte no MuseScore, salve o arquivo e
 importe a resposta humana:
 
@@ -220,7 +235,8 @@ rescore dataset-fix data/rescore-local `
 Antes de alterar o manifesto, o comando confirma:
 
 - hashes do pacote original, da lista de problemas e da auditoria métrica;
-- identidade exata entre a partitura-base do pacote e o gabarito do item;
+- identidade entre a partitura-base e o gabarito, ou mapeamento explícito de todas
+  as pautas quando forem modelos orquestrais diferentes;
 - quantidade de compassos;
 - permanência e posição de todos os identificadores;
 - correspondência inequívoca das partes por ID ou nome;

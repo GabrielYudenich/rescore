@@ -148,6 +148,22 @@ def detect_score_issues(
                 int(event["measure_index"]),
             )
         ].append(event)
+    stream_ends: dict[tuple[str, str, str, int], Fraction] = {}
+    staff_end_owner: dict[tuple[str, str, int], tuple[str, Fraction]] = {}
+    for (part_id, staff, voice, measure), events in grouped.items():
+        found = max(
+            (
+                Fraction(event["onset"]) + Fraction(event["duration"])
+                for event in events
+                if not event.get("grace")
+            ),
+            default=Fraction(0),
+        )
+        stream_ends[(part_id, staff, voice, measure)] = found
+        staff_key = (part_id, staff, measure)
+        current = staff_end_owner.get(staff_key)
+        if current is None or found > current[1] or (found == current[1] and voice < current[0]):
+            staff_end_owner[staff_key] = (voice, found)
     names = {part["id"]: part["name"] for part in score["parts"]}
     issues: list[dict[str, Any]] = []
     for (part_id, staff, voice, measure), events in sorted(grouped.items()):
@@ -169,8 +185,7 @@ def detect_score_issues(
         expected = _meter_duration(expected_meter)
         sounding = [event for event in events if not event.get("grace")]
         starts = [Fraction(event["onset"]) for event in sounding]
-        ends = [Fraction(event["onset"]) + Fraction(event["duration"]) for event in sounding]
-        found = max(ends, default=Fraction(0))
+        found = stream_ends[(part_id, staff, voice, measure)]
         if any(start < 0 for start in starts):
             issues.append(
                 {
@@ -185,7 +200,9 @@ def detect_score_issues(
                     "meter": expected_meter,
                 }
             )
-        if found != expected:
+        staff_owner, staff_found = staff_end_owner[(part_id, staff, measure)]
+        report_incomplete = staff_found < expected and voice == staff_owner
+        if found > expected or report_incomplete:
             relation = "long" if found > expected else "incomplete"
             issues.append(
                 {

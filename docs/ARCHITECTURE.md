@@ -186,6 +186,9 @@ de gravar qualquer histórico. O conteúdo de base é imutável; a correção ma
 prevalece somente na chave `compasso × parte × pauta`, carregando em conjunto suas
 vozes. Isso conserva tanto a
 previsão anterior quanto a resposta humana para aprendizado ativo e auditoria.
+Quando os IDs de parte pertencem a modelos orquestrais diferentes, o importador só
+aceita um mapeamento origem→destino explícito. A ausência total dos identificadores
+visíveis também exige confirmação posicional e fica registrada no histórico.
 
 ## Artefatos e retomada
 

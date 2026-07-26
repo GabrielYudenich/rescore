@@ -15,14 +15,20 @@ from rescore.musicxml import _strip_namespaces, parse_musicxml
 from rescore.training_export import _apply_corrections
 
 
-def _write_score(path: Path, *, overfull: bool = False) -> None:
+def _write_score(
+    path: Path,
+    *,
+    overfull: bool = False,
+    part_id: str = "P1",
+    part_name: str = "Bassoon",
+) -> None:
     root = ET.Element("score-partwise", {"version": "4.0"})
     work = ET.SubElement(root, "work")
     ET.SubElement(work, "work-title").text = "Test score"
     part_list = ET.SubElement(root, "part-list")
-    score_part = ET.SubElement(part_list, "score-part", {"id": "P1"})
-    ET.SubElement(score_part, "part-name").text = "Bassoon"
-    part = ET.SubElement(root, "part", {"id": "P1"})
+    score_part = ET.SubElement(part_list, "score-part", {"id": part_id})
+    ET.SubElement(score_part, "part-name").text = part_name
+    part = ET.SubElement(root, "part", {"id": part_id})
     for number, step in ((1, "C"), (2, "D")):
         measure = ET.SubElement(part, "measure", {"number": str(number)})
         if number == 1:
@@ -82,6 +88,29 @@ def test_detect_score_issues_reports_overfull_voice(tmp_path: Path) -> None:
     assert overfull[0]["possible_instrument"] == "Bassoon"
     assert "encontrado 5" in overfull[0]["message"]
     assert Path(result["html"]).is_file()
+
+
+def test_detect_score_issues_allows_secondary_voice_to_end_early(tmp_path: Path) -> None:
+    score = tmp_path / "score.musicxml"
+    _write_score(score)
+    tree = ET.parse(score)
+    measure = tree.find("./part/measure")
+    assert measure is not None
+    backup = ET.SubElement(measure, "backup")
+    ET.SubElement(backup, "duration").text = "4"
+    note = ET.SubElement(measure, "note")
+    pitch = ET.SubElement(note, "pitch")
+    ET.SubElement(pitch, "step").text = "E"
+    ET.SubElement(pitch, "octave").text = "4"
+    ET.SubElement(note, "duration").text = "1"
+    ET.SubElement(note, "voice").text = "2"
+    ET.SubElement(note, "type").text = "quarter"
+    tree.write(score, encoding="utf-8", xml_declaration=True)
+    result = detect_score_issues(score, tmp_path / "issues")
+    issues = [
+        json.loads(line) for line in Path(result["issues"]).read_text(encoding="utf-8").splitlines()
+    ]
+    assert not [issue for issue in issues if issue["kind"] == "measure-incomplete"]
 
 
 def test_review_pack_keeps_visible_id_and_inherited_context(
@@ -207,3 +236,76 @@ def test_dataset_fix_maps_corrected_review_measure_back_to_original(
     applied = _apply_corrections(dataset, manifest["items"][0], events, meters)
     assert events[("P1", "1", 2)][0]["pitch"] == "E4"
     assert applied[("P1", "1", 2)] == correction["id"]
+
+
+def test_dataset_fix_accepts_confirmed_order_and_explicit_instrument_map(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "candidate.musicxml"
+    target = tmp_path / "ground-truth.musicxml"
+    issues = tmp_path / "issues.jsonl"
+    image = tmp_path / "page.png"
+    _write_score(source, part_id="P1", part_name="Celesta lower")
+    _write_score(target, part_id="P29", part_name="Celesta")
+    _write_image(image)
+    _manual_issue(issues)
+    monkeypatch.setattr("rescore.issue_review.find_musescore", lambda _root: None)
+    pack_result = build_review_pack(tmp_path, source, tmp_path / "pack", issues_path=issues)
+
+    corrected = tmp_path / "corrected-without-id.musicxml"
+    tree = ET.parse(pack_result["musicxml"])
+    for node in tree.findall(".//rehearsal") + tree.findall(".//words"):
+        node.text = ""
+    note = tree.find("./part/measure/note")
+    assert note is not None
+    rest = note.find("rest")
+    assert rest is not None
+    note.remove(rest)
+    pitch = ET.Element("pitch")
+    ET.SubElement(pitch, "step").text = "F"
+    ET.SubElement(pitch, "octave").text = "4"
+    note.insert(0, pitch)
+    ET.SubElement(note, "type").text = "whole"
+    tree.write(corrected, encoding="utf-8", xml_declaration=True)
+
+    dataset = tmp_path / "dataset"
+    initialize_dataset(dataset, dataset_id="mapped", name="Mapped corrections")
+    add_pair(
+        tmp_path,
+        dataset,
+        item_id="manuscript",
+        images=[image],
+        score=target,
+        composer="Composer",
+        work="Work",
+        source_type="handwritten",
+        visibility="private",
+        rights_status="private",
+        source_license="all-rights-reserved",
+        redistributable=False,
+        measure_start=1,
+        measure_end=2,
+        verification="human-transcribed",
+        alignment_status="inferred",
+    )
+    result = apply_dataset_fix(
+        tmp_path,
+        dataset,
+        item_id="manuscript",
+        pack_path=Path(pack_result["manifest"]),
+        corrected=corrected,
+        reviewer="Reviewer",
+        target_map={("P1", "1"): ("P29", "1")},
+        confirm_order=True,
+    )
+    assert not result["base_matches_ground_truth"]
+    assert result["id_mapping_mode"] == "positional-confirmed"
+    manifest = json.loads((dataset / "rescore-dataset.json").read_text(encoding="utf-8"))
+    correction = manifest["items"][0]["corrections"][0]
+    overrides = json.loads((dataset / correction["overrides"]["path"]).read_text(encoding="utf-8"))
+    override = overrides["overrides"][0]
+    assert override["source_part_id"] == "P1"
+    assert override["target_part_id"] == "P29"
+    assert override["events"][0]["pitch"] == "F4"
+    assert validate_dataset(dataset)["valid"]

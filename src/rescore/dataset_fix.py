@@ -109,6 +109,8 @@ def apply_dataset_fix(
     corrected: Path,
     reviewer: str,
     note: str = "",
+    target_map: dict[tuple[str, str], tuple[str, str]] | None = None,
+    confirm_order: bool = False,
 ) -> dict[str, Any]:
     """Store corrected review measures and expose them as latest target overrides."""
     project_root = project_root.resolve()
@@ -117,6 +119,7 @@ def apply_dataset_fix(
     corrected = corrected.resolve()
     reviewer = reviewer.strip()
     note = note.strip()
+    target_map = target_map or {}
     if not reviewer:
         raise DatasetError("informe o nome do revisor")
     if not pack_path.is_file() or not corrected.is_file():
@@ -149,8 +152,32 @@ def apply_dataset_fix(
     ):
         raise DatasetError("o pacote de revisão não passou na auditoria métrica")
     dataset_score_path = dataset_root / item["ground_truth"]["musicxml"]["path"]
-    if _sha256(dataset_score_path) != pack_manifest["source_musicxml"]["sha256"]:
-        raise DatasetError("o pacote não foi criado a partir do gabarito deste item")
+    source_musicxml = _resolve_pack_file(pack_path, pack_manifest["source_musicxml"])
+    if _sha256(source_musicxml) != pack_manifest["source_musicxml"]["sha256"]:
+        raise DatasetError("a partitura-base mudou depois da criação do pacote")
+    issue_map = _load_issue_map(pack_manifest, pack_path)
+    source_streams = {
+        (issue_map[issue_id]["part_id"], str(issue_map[issue_id]["staff"]))
+        for mapping in pack_manifest["mappings"]
+        for issue_id in mapping["issue_ids"]
+    }
+    base_matches = _sha256(dataset_score_path) == pack_manifest["source_musicxml"]["sha256"]
+    missing_target_maps = sorted(source_streams - target_map.keys()) if not base_matches else []
+    if missing_target_maps:
+        formatted = ", ".join(f"{part}:{staff}" for part, staff in missing_target_maps)
+        raise DatasetError(
+            "a partitura-base difere do gabarito; informe o destino explícito de "
+            f"cada pauta com --map ORIGEM=DESTINO. Faltam: {formatted}"
+        )
+    dataset_score = parse_musicxml(dataset_score_path, include_rests=True)
+    dataset_parts = {part["id"] for part in dataset_score["parts"]}
+    for source_key, target_key in target_map.items():
+        if source_key not in source_streams:
+            raise DatasetError(f"mapeamento de origem não usado: {source_key[0]}:{source_key[1]}")
+        if target_key[0] not in dataset_parts:
+            raise DatasetError(f"parte de destino não existe no dataset: {target_key[0]}")
+        if not target_key[1].isdigit() or int(target_key[1]) < 1:
+            raise DatasetError(f"pauta de destino inválida: {target_key[0]}:{target_key[1]}")
 
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     correction_id = f"correction-{stamp}"
@@ -170,9 +197,11 @@ def apply_dataset_fix(
         )
         pack_copy = correction_dir / "review-pack.json"
         pack_xml_copy = correction_dir / "review-pack.musicxml"
+        source_xml_copy = correction_dir / "source-candidate.musicxml"
         issues_copy = correction_dir / "issues.jsonl"
         validation_copy = correction_dir / "review-pack-validation.json"
         shutil.copy2(pack_xml, pack_xml_copy)
+        shutil.copy2(source_musicxml, source_xml_copy)
         shutil.copy2(original_issues, issues_copy)
         shutil.copy2(pack_validation, validation_copy)
         preserved_pack = dict(pack_manifest)
@@ -181,8 +210,8 @@ def apply_dataset_fix(
             "sha256": pack_manifest["source"]["sha256"],
         }
         preserved_pack["source_musicxml"] = {
-            "path": Path(os.path.relpath(dataset_score_path, correction_dir)).as_posix(),
-            "sha256": _sha256(dataset_score_path),
+            "path": Path(os.path.relpath(source_xml_copy, correction_dir)).as_posix(),
+            "sha256": _sha256(source_xml_copy),
         }
         preserved_pack["pack_musicxml"] = _file_record(pack_xml_copy, correction_dir)
         preserved_pack["issues"] = _file_record(issues_copy, correction_dir)
@@ -208,21 +237,24 @@ def apply_dataset_fix(
             if not review_id or review_id not in found:
                 missing_ids.append(review_id or f"compasso de revisão {mapping['review_measure']}")
         if missing_ids:
-            raise DatasetError(
-                "identificadores removidos ou deslocados no arquivo corrigido: "
-                + ", ".join(missing_ids[:8])
-            )
+            found_ids = set().union(*visible.values()) if visible else set()
+            if not confirm_order or found_ids:
+                raise DatasetError(
+                    "identificadores removidos ou deslocados no arquivo corrigido: "
+                    + ", ".join(missing_ids[:8])
+                )
+            id_mapping_mode = "positional-confirmed"
+        else:
+            id_mapping_mode = "persistent-ids"
 
-        issue_map = _load_issue_map(pack_manifest, pack_path)
         part_map = _part_mapping(pack_score, corrected_score)
         pack_events = _event_lookup(pack_score)
         corrected_events = _event_lookup(corrected_score)
         pack_meters = _effective_meters(pack_score)
         corrected_meters = _effective_meters(corrected_score)
-        dataset_score = parse_musicxml(dataset_score_path, include_rests=True)
-        dataset_parts = {part["id"] for part in dataset_score["parts"]}
         overrides = []
-        seen: set[tuple[int, str, str]] = set()
+        seen_sources: set[tuple[int, str, str]] = set()
+        seen_targets: set[tuple[int, str, str]] = set()
         changed = 0
         for mapping in pack_manifest["mappings"]:
             review_measure = int(mapping["review_measure"])
@@ -233,13 +265,21 @@ def apply_dataset_fix(
                     raise DatasetError(f"issue ausente no sidecar: {issue_id}")
                 part_id = issue["part_id"]
                 staff = str(issue["staff"])
-                key = (original_measure, part_id, staff)
-                if key in seen:
+                source_key = (original_measure, part_id, staff)
+                if source_key in seen_sources:
                     continue
-                seen.add(key)
-                if part_id not in dataset_parts:
+                seen_sources.add(source_key)
+                target_part_id, target_staff = target_map.get((part_id, staff), (part_id, staff))
+                target_key = (original_measure, target_part_id, target_staff)
+                if target_key in seen_targets:
                     raise DatasetError(
-                        f"parte corrigida não existe no gabarito do dataset: {part_id}"
+                        "mais de uma pauta de origem aponta para o mesmo destino: "
+                        f"compasso {original_measure}, {target_part_id}:{target_staff}"
+                    )
+                seen_targets.add(target_key)
+                if target_part_id not in dataset_parts:
+                    raise DatasetError(
+                        f"parte corrigida não existe no gabarito do dataset: {target_part_id}"
                     )
                 corrected_part = part_map[part_id]
                 before_events = pack_events.get((part_id, staff, review_measure), [])
@@ -253,8 +293,10 @@ def apply_dataset_fix(
                 overrides.append(
                     {
                         "original_measure": original_measure,
-                        "target_part_id": part_id,
-                        "target_staff": staff,
+                        "source_part_id": part_id,
+                        "source_staff": staff,
+                        "target_part_id": target_part_id,
+                        "target_staff": target_staff,
                         "possible_instrument": issue["possible_instrument"],
                         "issue_ids": sorted(
                             {
@@ -279,6 +321,14 @@ def apply_dataset_fix(
             "created_at": _now(),
             "status": "human-corrected",
             "note": note,
+            "base_matches_ground_truth": base_matches,
+            "id_mapping_mode": id_mapping_mode,
+            "target_map": {
+                f"{source_part}:{source_staff}": f"{target_part}:{target_staff}"
+                for (source_part, source_staff), (target_part, target_staff) in sorted(
+                    target_map.items()
+                )
+            },
             "overrides": overrides,
         }
         overrides_path = correction_dir / "overrides.json"
@@ -311,10 +361,13 @@ def apply_dataset_fix(
             "reviewer": reviewer,
             "created_at": override_payload["created_at"],
             "note": note,
+            "base_matches_ground_truth": base_matches,
+            "id_mapping_mode": id_mapping_mode,
             "changed_streams": changed,
             "confirmed_unchanged_streams": len(overrides) - changed,
             "corrected_source": _file_record(corrected_source, dataset_root),
             "corrected_musicxml": _file_record(corrected_xml, dataset_root),
+            "source_musicxml": _file_record(source_xml_copy, dataset_root),
             "pack": _file_record(pack_copy, dataset_root),
             "pack_musicxml": _file_record(pack_xml_copy, dataset_root),
             "issues": _file_record(issues_copy, dataset_root),
@@ -341,5 +394,7 @@ def apply_dataset_fix(
         "changed_streams": changed,
         "confirmed_unchanged_streams": len(overrides) - changed,
         "training_export_stale": isinstance(item.get("training"), dict),
+        "base_matches_ground_truth": base_matches,
+        "id_mapping_mode": id_mapping_mode,
         "next_step": "execute dataset-export-training --force para aplicar as correções",
     }

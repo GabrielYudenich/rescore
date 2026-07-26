@@ -409,6 +409,7 @@ def validate_dataset(root: Path, *, verify_hashes: bool = True) -> dict[str, Any
             for name in (
                 "corrected_source",
                 "corrected_musicxml",
+                "source_musicxml",
                 "pack",
                 "pack_musicxml",
                 "issues",

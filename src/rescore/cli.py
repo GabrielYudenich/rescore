@@ -30,6 +30,27 @@ def _json(data: object) -> None:
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+def _parse_target_maps(values: list[str]) -> dict[tuple[str, str], tuple[str, str]]:
+    mappings: dict[tuple[str, str], tuple[str, str]] = {}
+    for value in values:
+        try:
+            source, target = value.split("=", 1)
+            source_part, source_staff = source.rsplit(":", 1)
+            target_part, target_staff = target.rsplit(":", 1)
+        except ValueError as exc:
+            raise ValueError(
+                f"mapeamento inválido: {value}; use ORIGEM:PAUTA=DESTINO:PAUTA"
+            ) from exc
+        key = (source_part.strip(), source_staff.strip())
+        destination = (target_part.strip(), target_staff.strip())
+        if not all((*key, *destination)):
+            raise ValueError(f"mapeamento incompleto: {value}")
+        if key in mappings and mappings[key] != destination:
+            raise ValueError(f"origem mapeada duas vezes: {source_part}:{source_staff}")
+        mappings[key] = destination
+    return mappings
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="rescore",
@@ -254,6 +275,18 @@ def build_parser() -> argparse.ArgumentParser:
     dataset_fix.add_argument("--corrected", type=Path, required=True)
     dataset_fix.add_argument("--reviewer", required=True)
     dataset_fix.add_argument("--note", default="")
+    dataset_fix.add_argument(
+        "--map",
+        action="append",
+        default=[],
+        metavar="ORIGEM:PAUTA=DESTINO:PAUTA",
+        help="mapeia IDs diferentes, por exemplo P17:1=P29:2",
+    )
+    dataset_fix.add_argument(
+        "--confirm-order",
+        action="store_true",
+        help="confirma a ordem dos compassos quando o MuseScore removeu todos os IDs visíveis",
+    )
     return parser
 
 
@@ -392,6 +425,8 @@ def main(argv: list[str] | None = None) -> int:
                 corrected=args.corrected,
                 reviewer=args.reviewer,
                 note=args.note,
+                target_map=_parse_target_maps(args.map),
+                confirm_order=args.confirm_order,
             )
         else:
             parser.error(f"comando desconhecido: {args.command}")

@@ -385,6 +385,7 @@
               "created_at",
               "corrected_source",
               "corrected_musicxml",
+              "source_musicxml",
               "pack",
               "pack_musicxml",
               "issues",
@@ -400,8 +401,13 @@
               "note": {"type": "string"},
               "changed_streams": {"type": "integer", "minimum": 0},
               "confirmed_unchanged_streams": {"type": "integer", "minimum": 0},
+              "base_matches_ground_truth": {"type": "boolean"},
+              "id_mapping_mode": {
+                "enum": ["persistent-ids", "positional-confirmed"]
+              },
               "corrected_source": {"$ref": "#/$defs/file"},
               "corrected_musicxml": {"$ref": "#/$defs/file"},
+              "source_musicxml": {"$ref": "#/$defs/file"},
               "pack": {"$ref": "#/$defs/file"},
               "pack_musicxml": {"$ref": "#/$defs/file"},
               "issues": {"$ref": "#/$defs/file"},
