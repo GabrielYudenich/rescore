@@ -117,6 +117,31 @@ Se `rescore` não estiver no `PATH` do PowerShell, ative o ambiente e use o exec
 diretamente, por exemplo `.\.venv\Scripts\rescore.exe doctor`, ou reinstale o projeto
 com `.\.venv\Scripts\python.exe -m pip install -e .`.
 
+Uma execução revisada pode virar a versão principal do projeto:
+
+```powershell
+rescore project-promote projects/minha-obra
+```
+
+Isso publica `partitura.mscz`, `partitura.musicxml`, `partitura.pdf` e `index.html`
+na raiz do projeto. Use `project-review ... --promote` para criar e promover em uma
+etapa. Uma pasta com `REPROVADO.txt` é bloqueada, e um MSCZ precisa passar pela
+reexportação estrutural antes da promoção.
+
+## 7.1. Movimentos completos da Sinfonia nº 10
+
+```powershell
+python run.py --movement 1 --promote  # páginas 7-41
+python run.py --movement 2 --promote  # páginas 42-66
+python run.py --movement 3 --promote  # páginas 67-99
+python run.py --movement 4 --promote  # páginas 100-200
+```
+
+Retire `--promote` quando quiser apenas gerar e inspecionar a saída em `output/`.
+Use `--force` somente quando quiser executar o OMR novamente. Os movimentos II e IV
+usam a leitura de fórmulas da própria fonte; não se aplica uma fórmula única a todo
+o intervalo.
+
 ## 8. Processar uma grade escaneada
 
 O assistente inclui um perfil experimental:

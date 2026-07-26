@@ -138,6 +138,7 @@ rescore review-pack candidato.musicxml --issues output/problemas/issues.jsonl --
 rescore instrument "Célesta — portée inférieure"
 rescore instrument-catalog --output output/instrumentos.json
 rescore project-review "Minha obra" --score candidato.musicxml --source-pdf fonte.pdf --pages 3-6
+rescore project-promote projects/minha-obra
 rescore dataset-fix data/meu-conjunto --id meu-item --pack output/correcoes/review-pack.json --corrected output/correcoes/review-pack.mscz --reviewer "Nome"
 ```
 
@@ -155,14 +156,52 @@ rescore project-review "Sinfonia - primeiro movimento" `
   --score-pdf output/movimento/normalized.pdf `
   --source-pdf "fonte.pdf" `
   --pages 7-41 `
-  --artifacts-dir output/movimento
+  --artifacts-dir output/movimento `
+  --promote
 ```
 
-Abra o `index.html` da execução indicada por `latest_run` em `project.json`. A pasta
-contém `entrada/`, `entregas/`, `issues/`, `correcoes/` e `logs/`, além de um
-`run.json` com caminhos, hashes e contagens. O PDF fonte não é copiado: somente o
-caminho local, o tamanho e o hash entram no manifesto. `projects/` é ignorada pelo
-Git para evitar publicar partituras ou fontes particulares por acidente.
+Com `--promote`, a raiz do projeto recebe `partitura.mscz`, `partitura.musicxml`,
+`partitura.pdf` e `index.html`. Esses arquivos representam a versão atual aprovada.
+A pasta `runs/` preserva todas as execuções; uma leitura marcada com `REPROVADO.txt`
+não pode substituir a versão atual. A cópia é atômica, adequada ao Windows, e a
+entrega MuseScore só é promovida depois de passar pela reexportação estrutural.
+
+Também é possível aprovar depois de revisar uma execução:
+
+```powershell
+rescore project-promote projects/sinfonia-10-primeiro-movimento
+rescore project-promote projects/sinfonia-10-primeiro-movimento `
+  --run 20260726T203443339073Z
+```
+
+Sem `--run`, o comando usa `latest_run`. Cada execução contém `entrada/`,
+`entregas/`, `issues/`, `correcoes/` e `logs/`, além de um `run.json` com caminhos,
+hashes e contagens. O PDF fonte não é copiado: somente o caminho local, o tamanho e
+o hash entram no manifesto. `projects/` é ignorada pelo Git para evitar publicar
+partituras ou fontes particulares por acidente.
+
+## Gerar movimentos completos da Sinfonia nº 10
+
+Nesta edição, os movimentos correspondem às páginas PDF 7-41, 42-66, 67-99 e
+100-200. O comando por movimento evita precisar memorizar esses limites:
+
+```powershell
+python run.py --movement 1
+python run.py --movement 2
+python run.py --movement 3
+python run.py --movement 4
+```
+
+Para gerar, validar, organizar o histórico e publicar a versão atual na raiz do
+projeto, acrescente `--promote`:
+
+```powershell
+python run.py --movement 1 --promote
+```
+
+`--force` refaz o OMR; sem ele, o ReScore reaproveita candidatos existentes sempre
+que o perfil permitir. Os movimentos II e IV ainda usam o pipeline genérico: suas
+fórmulas são lidas da fonte e não recebem uma métrica fixa inventada.
 
 O painel separa problemas estruturais — que geram pacote de correção — de
 diagnósticos anteriores da normalização. Por exemplo, acordes ambíguos e alturas

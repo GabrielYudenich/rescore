@@ -5,35 +5,47 @@ import json
 import sys
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from rescore.pages import compact_page_spec, parse_page_spec  # noqa: E402
 from rescore.musicxml import parse_musicxml  # noqa: E402
+from rescore.pages import compact_page_spec, parse_page_spec  # noqa: E402
 from rescore.pipeline import (  # noqa: E402
     assemble_choros9_continuous,
     assemble_movement1_complete,
     assemble_movement1_pages_7_12,
-    assemble_scherzo_complete,
     assemble_scherzo_67_69,
+    assemble_scherzo_complete,
     convert,
     convert_with_musescore,
     extract_omr_candidate,
 )
+from rescore.projects import create_review_project, promote_project_run  # noqa: E402
 from rescore.tooling import find_musescore  # noqa: E402
-
 
 DEFAULT_PDF = PROJECT_ROOT / "HVL_Sinfonia-n10-Sume-Pater-Patrium_partitura©ABM.pdf"
 SCHERZO_XML = PROJECT_ROOT / "III. Scherzo (descompactado).musicxml"
 SCHERZO_MSCZ = PROJECT_ROOT / "III. Scherzo.mscz"
+SINFONIA10_MOVEMENTS = {
+    1: {"pages": (7, 41), "name": "Sinfonia 10 - Primeiro Movimento"},
+    2: {"pages": (42, 66), "name": "Sinfonia 10 - Segundo Movimento"},
+    3: {"pages": (67, 99), "name": "Sinfonia 10 - Terceiro Movimento"},
+    4: {"pages": (100, 200), "name": "Sinfonia 10 - Quarto Movimento"},
+}
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Analisa páginas da partitura e gera MusicXML, MSCZ, PDF e relatórios."
     )
-    parser.add_argument("--pages", help="páginas, por exemplo: 7-8, 67-69 ou 70,72")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--pages", help="páginas, por exemplo: 7-8, 67-69 ou 70,72")
+    selection.add_argument(
+        "--movement",
+        type=int,
+        choices=tuple(SINFONIA10_MOVEMENTS),
+        help="movimento completo da Sinfonia 10 nesta edição (1, 2, 3 ou 4)",
+    )
     parser.add_argument("--pdf", type=Path, default=DEFAULT_PDF)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--meter", help="fórmula fixa para páginas genéricas, como 4/4 ou 9/8")
@@ -57,6 +69,11 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--force", action="store_true", help="refaz o OMR já armazenado")
+    parser.add_argument(
+        "--promote",
+        action="store_true",
+        help="organiza e publica o movimento validado em projects/<movimento>/partitura.*",
+    )
     return parser
 
 
@@ -104,9 +121,7 @@ def _convert_choros9_pages(
                 scan_profile=True,
             )
         except Exception as exc:
-            failures.append(
-                {"page": page, "error": str(exc), "output": str(page_output.resolve())}
-            )
+            failures.append({"page": page, "error": str(exc), "output": str(page_output.resolve())})
             print(f"  página {page} marcada para revisão: {exc}")
             continue
         artifacts = page_manifest["artifacts"]
@@ -124,8 +139,7 @@ def _convert_choros9_pages(
         score = parse_musicxml(Path(resolved_musicxml), include_rests=True)
         pitched_events = sum(bool(event.get("pitch")) for event in score["events"])
         generic_names = sum(
-            part["name"].strip().casefold() in {"", "voice"}
-            for part in score["parts"]
+            part["name"].strip().casefold() in {"", "voice"} for part in score["parts"]
         )
         warnings = []
         if not score["time_signatures"]:
@@ -147,9 +161,7 @@ def _convert_choros9_pages(
                     "parts": score["parts_count"],
                     "measures": score["measures"],
                     "pitched_events": pitched_events,
-                    "tuplet_events": sum(
-                        bool(event.get("tuplet")) for event in score["events"]
-                    ),
+                    "tuplet_events": sum(bool(event.get("tuplet")) for event in score["events"]),
                     "detected_time_signatures": score["time_signatures"],
                     "warnings": warnings,
                 },
@@ -168,9 +180,7 @@ def _convert_choros9_pages(
             "requested_pages": len(pages),
             "editable_pages": len(successes),
             "review_required": len(failures),
-            "pages_with_warnings": sum(
-                bool(item["quality"]["warnings"]) for item in successes
-            ),
+            "pages_with_warnings": sum(bool(item["quality"]["warnings"]) for item in successes),
         },
         "successes": successes,
         "failures": failures,
@@ -208,19 +218,11 @@ def _convert_choros9_pages(
             batch["summary"]["continuous_score"] = True
             batch["artifacts"].update(
                 {
-                    "normalized_musicxml": continuous_artifacts[
-                        "normalized_musicxml"
-                    ],
-                    "normalized_musescore": continuous_artifacts[
-                        "normalized_musescore"
-                    ],
+                    "normalized_musicxml": continuous_artifacts["normalized_musicxml"],
+                    "normalized_musescore": continuous_artifacts["normalized_musescore"],
                     "normalized_pdf": continuous_artifacts["normalized_pdf"],
-                    "normalized_previews": continuous_artifacts[
-                        "normalized_previews"
-                    ],
-                    "playability_report": continuous_artifacts[
-                        "playability_report"
-                    ],
+                    "normalized_previews": continuous_artifacts["normalized_previews"],
+                    "playability_report": continuous_artifacts["playability_report"],
                 }
             )
     else:
@@ -288,7 +290,17 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.reconfigure(encoding="utf-8")
     args = _parser().parse_args(argv)
     try:
-        page_text = args.pages or input("Quais páginas deseja analisar? (ex.: 67-69): ").strip()
+        if args.promote and args.movement is None:
+            raise ValueError("--promote exige --movement para definir o projeto de destino")
+        if args.movement is not None:
+            movement = SINFONIA10_MOVEMENTS[args.movement]
+            page_text = f"{movement['pages'][0]}-{movement['pages'][1]}"
+            print(
+                f"{movement['name']}: páginas PDF {page_text}; "
+                "as fórmulas serão preservadas da fonte."
+            )
+        else:
+            page_text = args.pages or input("Quais páginas deseja analisar? (ex.: 67-69): ").strip()
         pages = parse_page_spec(page_text)
         page_spec = compact_page_spec(pages)
         pdf = args.pdf.resolve()
@@ -306,9 +318,7 @@ def main(argv: list[str] | None = None) -> int:
             reference_mscz = args.reference_mscz
             if reference_mscz is None:
                 automatic_reference = PROJECT_ROOT / "Choros 9.mscz"
-                reference_mscz = (
-                    automatic_reference if automatic_reference.is_file() else None
-                )
+                reference_mscz = automatic_reference if automatic_reference.is_file() else None
             reference_musicxml = None
             if reference_mscz is not None and 3 in pages:
                 reference_mscz = reference_mscz.resolve()
@@ -321,9 +331,7 @@ def main(argv: list[str] | None = None) -> int:
                 reference_musicxml = reference_folder / "choros9-reference.musicxml"
                 musescore = find_musescore(PROJECT_ROOT)
                 if musescore is None:
-                    raise FileNotFoundError(
-                        "MuseScore não encontrado; execute `rescore doctor`"
-                    )
+                    raise FileNotFoundError("MuseScore não encontrado; execute `rescore doctor`")
                 convert_with_musescore(
                     musescore,
                     reference_mscz,
@@ -385,16 +393,11 @@ def main(argv: list[str] | None = None) -> int:
                     PROJECT_ROOT,
                     pdf,
                     str(page),
-                    PROJECT_ROOT
-                    / "output"
-                    / "movement1-omr-pages"
-                    / f"page-{page:04d}",
+                    PROJECT_ROOT / "output" / "movement1-omr-pages" / f"page-{page:04d}",
                     force=args.force,
                     omr_dpi=dpi,
                 )
-            output = (
-                args.output or PROJECT_ROOT / "output" / "movement1-complete"
-            ).resolve()
+            output = (args.output or PROJECT_ROOT / "output" / "movement1-complete").resolve()
             manifest = assemble_movement1_complete(
                 PROJECT_ROOT,
                 base_musicxml,
@@ -429,8 +432,7 @@ def main(argv: list[str] | None = None) -> int:
                     omr_dpi=dpi,
                 )
             output = (
-                args.output
-                or PROJECT_ROOT / "output" / f"movement1-pages-7-{pages[-1]}"
+                args.output or PROJECT_ROOT / "output" / f"movement1-pages-7-{pages[-1]}"
             ).resolve()
             manifest = assemble_movement1_pages_7_12(
                 PROJECT_ROOT,
@@ -475,10 +477,7 @@ def main(argv: list[str] | None = None) -> int:
                     PROJECT_ROOT,
                     pdf,
                     str(page),
-                    PROJECT_ROOT
-                    / "output"
-                    / "scherzo-omr-pages"
-                    / f"page-{page:04d}",
+                    PROJECT_ROOT / "output" / "scherzo-omr-pages" / f"page-{page:04d}",
                     force=args.force,
                     omr_dpi=dpi,
                 )
@@ -529,6 +528,30 @@ def main(argv: list[str] | None = None) -> int:
                 SCHERZO_MSCZ,
                 dpi,
             )
+        elif args.movement in {2, 4}:
+            output = (
+                args.output or PROJECT_ROOT / "output" / f"movement{args.movement}-complete"
+            ).resolve()
+            manifest = convert(
+                PROJECT_ROOT,
+                pdf,
+                page_spec,
+                output,
+                force=args.force,
+                omr_dpi=dpi,
+            )
+            candidate_pdf = output / "candidate.pdf"
+            convert_with_musescore(
+                find_musescore(PROJECT_ROOT),
+                Path(manifest["artifacts"]["musescore"]),
+                candidate_pdf,
+                output / "musescore-candidate-pdf.log",
+            )
+            manifest["artifacts"]["score_pdf"] = str(candidate_pdf.resolve())
+            (output / "manifest.json").write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
         else:
             meter = _meter_for(pages, args.meter)
             output = (args.output or PROJECT_ROOT / "output" / f"pages-{page_spec}").resolve()
@@ -550,14 +573,43 @@ def main(argv: list[str] | None = None) -> int:
             or artifacts.get("editable_musescore")
         )
         print(f"MuseScore: {musescore_artifact}")
-        if artifacts.get("normalized_pdf"):
-            print(f"PDF:       {artifacts.get('normalized_pdf')}")
+        score_pdf_artifact = artifacts.get("normalized_pdf") or artifacts.get("score_pdf")
+        if score_pdf_artifact:
+            print(f"PDF:       {score_pdf_artifact}")
         if manifest.get("summary"):
             print(
                 "Páginas editáveis/revisão: "
                 f"{manifest['summary']['editable_pages']}/"
                 f"{manifest['summary']['review_required']}"
             )
+        if args.promote:
+            score_artifact = artifacts.get("normalized_musicxml") or artifacts.get("musicxml")
+            musescore_artifact = artifacts.get("normalized_musescore") or artifacts.get("musescore")
+            pdf_artifact = artifacts.get("normalized_pdf") or artifacts.get("score_pdf")
+            if not score_artifact:
+                raise ValueError("a geração não produziu MusicXML para organizar")
+            project = create_review_project(
+                PROJECT_ROOT,
+                name=SINFONIA10_MOVEMENTS[args.movement]["name"],
+                score=Path(score_artifact),
+                output_root=PROJECT_ROOT / "projects",
+                musescore_score=Path(musescore_artifact) if musescore_artifact else None,
+                score_pdf=Path(pdf_artifact) if pdf_artifact else None,
+                source_pdf=pdf,
+                pages=page_spec,
+                artifacts_dir=output,
+            )
+            promotion = promote_project_run(
+                Path(project["project"]),
+                run=Path(project["run"]),
+            )
+            manifest["project"] = {"review": project, "promotion": promotion}
+            (output / "manifest.json").write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"Projeto:   {promotion['project']}")
+            print(f"Atual:     {promotion['index']}")
         print(f"Relatório: {output / 'manifest.json'}")
         return 0
     except (EOFError, KeyboardInterrupt):

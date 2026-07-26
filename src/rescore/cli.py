@@ -26,7 +26,7 @@ from .musicxml import compare_scores, parse_musicxml, write_canonical
 from .normalize import build_normalized_musicxml
 from .pdf import pdf_info, render_pages
 from .pipeline import convert
-from .projects import create_review_project
+from .projects import create_review_project, promote_project_run
 from .review import review_dataset_alignment
 from .staff_alignment import align_dataset_staffs, validate_staff_alignment
 from .tooling import doctor
@@ -298,6 +298,21 @@ def build_parser() -> argparse.ArgumentParser:
     project_review.add_argument("--output", type=Path, default=Path("projects"))
     project_review.add_argument("--batch-size", type=int, default=20)
     project_review.add_argument("--meter", help="fórmula fixa opcional, por exemplo 4/4")
+    project_review.add_argument(
+        "--promote",
+        action="store_true",
+        help="publica esta execução validada como partitura atual na raiz do projeto",
+    )
+
+    project_promote = subparsers.add_parser(
+        "project-promote",
+        help="promove uma execução validada para partitura.* na raiz do projeto",
+    )
+    project_promote.add_argument("project", type=Path)
+    project_promote.add_argument(
+        "--run",
+        help="data/pasta da execução; sem esta opção usa latest_run",
+    )
 
     dataset_fix = subparsers.add_parser(
         "dataset-fix",
@@ -483,6 +498,13 @@ def main(argv: list[str] | None = None) -> int:
                 batch_size=args.batch_size,
                 meter=args.meter,
             )
+            if args.promote:
+                result["promotion"] = promote_project_run(
+                    Path(result["project"]),
+                    run=Path(result["run"]),
+                )
+        elif args.command == "project-promote":
+            result = promote_project_run(args.project, run=args.run)
         elif args.command == "dataset-fix":
             result = apply_dataset_fix(
                 project_root,

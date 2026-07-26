@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from rescore.projects import _preflight_musescore_delivery, create_review_project
+from rescore.projects import (
+    _preflight_musescore_delivery,
+    create_review_project,
+    promote_project_run,
+)
 
 
 def _write_overfull_score(path: Path) -> None:
@@ -98,3 +102,80 @@ def test_musescore_preflight_rejects_roundtrip_with_invalid_measure_duration(
     monkeypatch.setattr("rescore.projects.convert_with_musescore", fake_convert)
     with pytest.raises(ValueError, match="reexportação do próprio MuseScore"):
         _preflight_musescore_delivery(tmp_path, source)
+
+
+def test_promote_project_publishes_stable_root_artifacts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    score = tmp_path / "score.musicxml"
+    _write_overfull_score(score)
+    monkeypatch.setattr("rescore.issue_review.find_musescore", lambda _root: None)
+    created = create_review_project(
+        tmp_path,
+        name="Obra de teste",
+        score=score,
+        output_root=tmp_path / "projects",
+    )
+
+    promoted = promote_project_run(Path(created["project"]))
+
+    project = Path(created["project"])
+    assert Path(promoted["artifacts"]["MusicXML editável"]) == project / "partitura.musicxml"
+    assert (project / "partitura.musicxml").read_bytes() == (
+        Path(created["run"]) / "entrada" / "partitura.musicxml"
+    ).read_bytes()
+    assert (project / "index.html").is_file()
+    manifest = json.loads((project / "project.json").read_text(encoding="utf-8"))
+    assert manifest["promoted_run"] == Path(created["run"]).relative_to(project).as_posix()
+    assert manifest["current_artifacts"]["MusicXML editável"]["path"] == ("partitura.musicxml")
+
+
+def test_promote_project_rejects_locally_rejected_run(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    score = tmp_path / "score.musicxml"
+    _write_overfull_score(score)
+    monkeypatch.setattr("rescore.issue_review.find_musescore", lambda _root: None)
+    created = create_review_project(
+        tmp_path,
+        name="Leitura reprovada",
+        score=score,
+        output_root=tmp_path / "projects",
+    )
+    project = Path(created["project"])
+    (project / "REPROVADO.txt").write_text("não promover", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="marcada como reprovada"):
+        promote_project_run(project)
+    assert not (project / "partitura.musicxml").exists()
+
+
+def test_promote_project_rejects_mscz_without_roundtrip_validation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    score = tmp_path / "score.musicxml"
+    musescore_score = tmp_path / "score.mscz"
+    _write_overfull_score(score)
+    musescore_score.write_bytes(b"test placeholder")
+    monkeypatch.setattr("rescore.issue_review.find_musescore", lambda _root: None)
+    monkeypatch.setattr(
+        "rescore.projects._preflight_musescore_delivery",
+        lambda _root, _score: {"valid": True, "issues": 0, "critical_issues": 0},
+    )
+    created = create_review_project(
+        tmp_path,
+        name="Entrega sem validação",
+        score=score,
+        musescore_score=musescore_score,
+        output_root=tmp_path / "projects",
+    )
+    run_manifest_path = Path(created["run"]) / "run.json"
+    run_manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
+    run_manifest["delivery_roundtrip_validation"] = None
+    run_manifest_path.write_text(json.dumps(run_manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="não possui uma validação"):
+        promote_project_run(Path(created["project"]))
