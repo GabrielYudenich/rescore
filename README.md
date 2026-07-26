@@ -160,12 +160,14 @@ review-pack/
   review-pack.pdf        conferência visual em A4 paisagem
   review-pack.musicxml   representação portátil
   review-pack.json       mapa auditável para a partitura original
+  review-pack-validation.json  auditoria métrica do formulário
 ```
 
 Cada compasso recebe um identificador visível como `RS-REVIEW-0001` e informa o
-compasso original, instrumento provável, pauta e tipo de dúvida. Não apague esse
-texto. Corrija somente as notas, pausas, vozes, claves, fórmulas, quiálteras ou
-outros elementos musicais e salve o `.mscz`.
+compasso original, instrumento provável, pauta e tipo de dúvida. O formulário é
+deliberadamente limpo: contém contexto de fórmula/clave e pausas completas, mas não
+copia as notas potencialmente quebradas. Não apague o texto identificador. Escreva
+o compasso correto e salve o `.mscz`.
 
 Quando a leitura pertencer a um item já cadastrado no dataset, importe o arquivo
 corrigido:

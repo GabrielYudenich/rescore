@@ -197,8 +197,10 @@ tarefa prioritária para o revisor. O relatório HTML apresenta compasso, parte,
 instrumento provável, pauta, voz, instante e duração.
 
 `review-pack` seleciona somente os compassos e partes afetados. Ele recompõe os
-atributos herdados necessários para o trecho abrir isoladamente, preserva a música
-reconhecida e gera MusicXML, MuseScore, PDF A4 paisagem e um manifesto. Cada
+atributos herdados necessários para o trecho abrir isoladamente, substitui a leitura
+suspeita por pausas de compasso válidas e gera MusicXML, MuseScore, PDF A4 paisagem,
+auditoria métrica e um manifesto. As notas quebradas nunca são copiadas para o
+formulário. Cada
 compasso de revisão possui um código visível `RS-REVIEW-NNNN`. Esse código deve
 permanecer no arquivo corrigido, pois impede que uma mudança de ordem seja aplicada
 ao compasso errado.
@@ -217,7 +219,7 @@ rescore dataset-fix data/rescore-local `
 
 Antes de alterar o manifesto, o comando confirma:
 
-- hashes do pacote original e da lista de problemas;
+- hashes do pacote original, da lista de problemas e da auditoria métrica;
 - identidade exata entre a partitura-base do pacote e o gabarito do item;
 - quantidade de compassos;
 - permanência e posição de todos os identificadores;

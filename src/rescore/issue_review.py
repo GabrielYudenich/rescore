@@ -6,6 +6,7 @@ import copy
 import hashlib
 import html
 import json
+import math
 import re
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
@@ -15,6 +16,7 @@ from typing import Any
 
 from .mscz import set_page_layout
 from .musicxml import _read_musicxml, _strip_namespaces, parse_musicxml
+from .normalize import validate_meter_score
 from .pipeline import convert_with_musescore
 from .tooling import find_musescore
 
@@ -336,6 +338,102 @@ def _review_direction(
     return direction
 
 
+def _blank_measure_attributes(
+    source_part: ET.Element,
+    original_measure: int,
+    *,
+    meter_override: str | None,
+    minimum_staves: int,
+) -> tuple[ET.Element, Fraction, int]:
+    attributes = _effective_attributes(source_part, original_measure)
+    if attributes is None:
+        attributes = ET.Element("attributes")
+    time = attributes.find("time")
+    if meter_override:
+        _meter_duration(meter_override)
+        beats, beat_type = meter_override.split("/", 1)
+        if time is None:
+            time = ET.SubElement(attributes, "time")
+        for child in list(time):
+            time.remove(child)
+        ET.SubElement(time, "beats").text = beats
+        ET.SubElement(time, "beat-type").text = beat_type
+    if time is None:
+        raise ValueError(
+            f"fórmula de compasso ausente em {source_part.get('id', '')}, "
+            f"compasso {original_measure}; informe --meter"
+        )
+    meter = f"{time.findtext('beats', '')}/{time.findtext('beat-type', '')}"
+    duration = _meter_duration(meter)
+    divisions_node = attributes.find("divisions")
+    divisions = int(divisions_node.text) if divisions_node is not None else 1
+    divisions = math.lcm(max(1, divisions), duration.denominator)
+    if divisions_node is None:
+        divisions_node = ET.Element("divisions")
+        attributes.insert(0, divisions_node)
+    divisions_node.text = str(divisions)
+    declared_staves = int(attributes.findtext("staves", "1"))
+    clef_staves = max(
+        (int(clef.get("number", "1")) for clef in attributes.findall("clef")),
+        default=1,
+    )
+    staff_count = max(1, minimum_staves, declared_staves, clef_staves)
+    if staff_count > 1:
+        staves_node = attributes.find("staves")
+        if staves_node is None:
+            staves_node = ET.Element("staves")
+            insertion = next(
+                (
+                    index
+                    for index, child in enumerate(attributes)
+                    if child.tag in {"clef", "transpose"}
+                ),
+                len(attributes),
+            )
+            attributes.insert(insertion, staves_node)
+        staves_node.text = str(staff_count)
+    return attributes, duration, staff_count
+
+
+def _append_blank_staves(
+    measure: ET.Element,
+    *,
+    duration: Fraction,
+    divisions: int,
+    staff_count: int,
+) -> None:
+    duration_units = duration * divisions
+    if duration_units.denominator != 1:
+        raise ValueError(f"duração de compasso não representável: {duration}")
+    units = str(duration_units.numerator)
+    for staff in range(1, staff_count + 1):
+        if staff > 1:
+            backup = ET.SubElement(measure, "backup")
+            ET.SubElement(backup, "duration").text = units
+        note = ET.SubElement(measure, "note")
+        ET.SubElement(note, "rest", {"measure": "yes"})
+        ET.SubElement(note, "duration").text = units
+        ET.SubElement(note, "voice").text = "1"
+        if staff_count > 1:
+            ET.SubElement(note, "staff").text = str(staff)
+
+
+def _validate_review_musicxml(path: Path) -> dict[str, Any]:
+    score = parse_musicxml(path, include_rests=True)
+    meters = _effective_meter_map(score, None)
+
+    def duration_for(part_id: str, measure: int) -> Fraction:
+        meter = meters.get((part_id, measure))
+        if not meter:
+            raise ValueError(f"fórmula ausente no pacote: {part_id}, compasso {measure}")
+        return _meter_duration(meter)
+
+    validation = validate_meter_score(score, duration_for)
+    if not validation["valid"]:
+        raise ValueError(f"pacote de revisão metricamente inválido: {validation['violations'][:3]}")
+    return validation
+
+
 def _source_musicxml(project_root: Path, source: Path, output_dir: Path) -> Path:
     source = source.resolve()
     if source.suffix.casefold() in {".musicxml", ".xml"}:
@@ -391,6 +489,11 @@ def build_review_pack(
         by_measure[measure].append(issue)
         by_measure_part[(measure, issue["part_id"])].append(issue)
     original_measures = sorted(by_measure)
+    maximum_staff_by_part: dict[str, int] = defaultdict(lambda: 1)
+    for issue in issues:
+        maximum_staff_by_part[issue["part_id"]] = max(
+            maximum_staff_by_part[issue["part_id"]], int(issue["staff"])
+        )
 
     pack_root = copy.deepcopy(root)
     part_list = pack_root.find("part-list")
@@ -440,39 +543,57 @@ def build_review_pack(
         for review_number, original_measure in enumerate(original_measures, 1):
             if original_measure < 1 or original_measure > len(source_measures):
                 raise ValueError(f"compasso {original_measure} não existe em {part_id}")
-            measure = copy.deepcopy(source_measures[original_measure - 1])
-            measure.set("number", str(review_number))
-            for print_node in measure.findall("print"):
-                measure.remove(print_node)
-            measure.insert(0, ET.Element("print", {"new-system": "yes"}))
-            attributes = _effective_attributes(source_part, original_measure)
-            insert_at = 1
-            if attributes is not None:
-                measure.insert(insert_at, attributes)
-                insert_at += 1
+            measure = ET.Element("measure", {"number": str(review_number)})
+            measure.append(ET.Element("print", {"new-system": "yes"}))
+            attributes, measure_duration, staff_count = _blank_measure_attributes(
+                source_part,
+                original_measure,
+                meter_override=meter,
+                minimum_staves=maximum_staff_by_part[part_id],
+            )
+            measure.append(attributes)
             relevant = by_measure_part.get((original_measure, part_id), [])
             if relevant:
-                measure.insert(
-                    insert_at,
+                measure.append(
                     _review_direction(
                         relevant,
                         original_measure,
                         f"RS-REVIEW-{review_number:04d}",
                     ),
                 )
+            divisions = int(attributes.findtext("divisions", "1"))
+            _append_blank_staves(
+                measure,
+                duration=measure_duration,
+                divisions=divisions,
+                staff_count=staff_count,
+            )
             pack_part.append(measure)
 
     pack_xml = output_dir / "review-pack.musicxml"
     ET.ElementTree(pack_root).write(pack_xml, encoding="utf-8", xml_declaration=True)
-    parse_musicxml(pack_xml, include_rests=True)
+    validation = {"musicxml": _validate_review_musicxml(pack_xml), "musescore_roundtrip": None}
     mscz = output_dir / "review-pack.mscz"
     pdf = output_dir / "review-pack.pdf"
+    roundtrip_xml = output_dir / "review-pack-roundtrip.musicxml"
     musescore = find_musescore(project_root)
     if musescore is not None:
         convert_with_musescore(musescore, pack_xml, mscz, output_dir / "musescore-mscz.log")
         spatium = 1.3 if len(selected_parts) <= 4 else 0.9 if len(selected_parts) <= 10 else 0.6
         set_page_layout(mscz, paper="A4", landscape=True, spatium_mm=spatium)
+        convert_with_musescore(
+            musescore,
+            mscz,
+            roundtrip_xml,
+            output_dir / "musescore-roundtrip.log",
+        )
+        validation["musescore_roundtrip"] = _validate_review_musicxml(roundtrip_xml)
         convert_with_musescore(musescore, mscz, pdf, output_dir / "musescore-pdf.log")
+    validation_path = output_dir / "review-pack-validation.json"
+    validation_path.write_text(
+        json.dumps(validation, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     manifest = {
         "schema": "rescore-review-pack",
         "schema_version": REVIEW_PACK_SCHEMA_VERSION,
@@ -483,6 +604,7 @@ def build_review_pack(
         "pack_musicxml": _file_record(pack_xml, output_dir),
         "pack_mscz": _file_record(mscz, output_dir) if mscz.is_file() else None,
         "pack_pdf": _file_record(pdf, output_dir) if pdf.is_file() else None,
+        "validation": _file_record(validation_path, output_dir),
         "mappings": mappings,
         "policy": "IDs visíveis e o sidecar devem permanecer juntos até a importação.",
     }
@@ -495,6 +617,7 @@ def build_review_pack(
         "musicxml": str(pack_xml),
         "mscz": str(mscz) if mscz.is_file() else None,
         "pdf": str(pdf) if pdf.is_file() else None,
+        "validation": str(validation_path),
         "issues": len(issues),
         "review_measures": len(mappings),
         "parts": len(selected_parts),

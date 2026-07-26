@@ -106,6 +106,12 @@ def test_review_pack_keeps_visible_id_and_inherited_context(
     assert "Compasso original 2" in visible_text
     assert measure.findtext("./attributes/time/beats") == "4"
     assert measure.findtext("./attributes/clef/sign") == "F"
+    notes = measure.findall("note")
+    assert len(notes) == 1
+    assert notes[0].find("rest") is not None
+    assert notes[0].find("pitch") is None
+    validation = json.loads(Path(result["validation"]).read_text(encoding="utf-8"))
+    assert validation["musicxml"]["valid"]
     pack = json.loads(Path(result["manifest"]).read_text(encoding="utf-8"))
     assert pack["mappings"][0]["original_measure"] == 2
     assert pack["mappings"][0]["review_id"] == "RS-REVIEW-0001"
@@ -126,9 +132,16 @@ def test_dataset_fix_maps_corrected_review_measure_back_to_original(
     pack_result = build_review_pack(tmp_path, score, pack_dir, issues_path=issues)
     corrected = tmp_path / "corrected.musicxml"
     tree = ET.parse(pack_result["musicxml"])
-    pitch_step = tree.find("./part/measure/note/pitch/step")
-    assert pitch_step is not None
-    pitch_step.text = "E"
+    note = tree.find("./part/measure/note")
+    assert note is not None
+    rest = note.find("rest")
+    assert rest is not None
+    note.remove(rest)
+    pitch = ET.Element("pitch")
+    ET.SubElement(pitch, "step").text = "E"
+    ET.SubElement(pitch, "octave").text = "4"
+    note.insert(0, pitch)
+    ET.SubElement(note, "type").text = "whole"
     tree.write(corrected, encoding="utf-8", xml_declaration=True)
 
     dataset = tmp_path / "dataset"

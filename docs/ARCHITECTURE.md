@@ -178,6 +178,8 @@ MusicXML candidato
 ```
 
 O pacote carrega atributos herdados, mas contém apenas partes e compassos afetados.
+Eventos suspeitos não são copiados: cada pauta nasce como um compasso de pausas
+exatamente completo e passa por auditoria antes e depois da importação no MuseScore.
 Um identificador curto e visível associa o compasso isolado à origem. Na importação,
 hashes, contagem, identificadores, partes e limites do dataset são verificados antes
 de gravar qualquer histórico. O conteúdo de base é imutável; a correção mais recente

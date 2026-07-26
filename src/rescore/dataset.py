@@ -412,6 +412,7 @@ def validate_dataset(root: Path, *, verify_hashes: bool = True) -> dict[str, Any
                 "pack",
                 "pack_musicxml",
                 "issues",
+                "validation",
                 "overrides",
                 "comparison",
             ):

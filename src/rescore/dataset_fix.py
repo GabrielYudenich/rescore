@@ -137,6 +137,17 @@ def apply_dataset_fix(
     original_issues = _resolve_pack_file(pack_path, pack_manifest["issues"])
     if _sha256(original_issues) != pack_manifest["issues"]["sha256"]:
         raise DatasetError("a lista de problemas mudou depois da criação do pacote")
+    pack_validation = _resolve_pack_file(pack_path, pack_manifest["validation"])
+    if _sha256(pack_validation) != pack_manifest["validation"]["sha256"]:
+        raise DatasetError("a auditoria mudou depois da criação do pacote")
+    validation_payload = _load_json(pack_validation)
+    completed_validations = [
+        report for report in validation_payload.values() if isinstance(report, dict)
+    ]
+    if not completed_validations or not all(
+        report.get("valid") for report in completed_validations
+    ):
+        raise DatasetError("o pacote de revisão não passou na auditoria métrica")
     dataset_score_path = dataset_root / item["ground_truth"]["musicxml"]["path"]
     if _sha256(dataset_score_path) != pack_manifest["source_musicxml"]["sha256"]:
         raise DatasetError("o pacote não foi criado a partir do gabarito deste item")
@@ -160,8 +171,10 @@ def apply_dataset_fix(
         pack_copy = correction_dir / "review-pack.json"
         pack_xml_copy = correction_dir / "review-pack.musicxml"
         issues_copy = correction_dir / "issues.jsonl"
+        validation_copy = correction_dir / "review-pack-validation.json"
         shutil.copy2(pack_xml, pack_xml_copy)
         shutil.copy2(original_issues, issues_copy)
+        shutil.copy2(pack_validation, validation_copy)
         preserved_pack = dict(pack_manifest)
         preserved_pack["source"] = {
             "path": "external-source-not-copied",
@@ -173,6 +186,7 @@ def apply_dataset_fix(
         }
         preserved_pack["pack_musicxml"] = _file_record(pack_xml_copy, correction_dir)
         preserved_pack["issues"] = _file_record(issues_copy, correction_dir)
+        preserved_pack["validation"] = _file_record(validation_copy, correction_dir)
         pack_copy.write_text(
             json.dumps(preserved_pack, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
@@ -304,6 +318,7 @@ def apply_dataset_fix(
             "pack": _file_record(pack_copy, dataset_root),
             "pack_musicxml": _file_record(pack_xml_copy, dataset_root),
             "issues": _file_record(issues_copy, dataset_root),
+            "validation": _file_record(validation_copy, dataset_root),
             "overrides": _file_record(overrides_path, dataset_root),
             "comparison": _file_record(comparison_path, dataset_root),
         }

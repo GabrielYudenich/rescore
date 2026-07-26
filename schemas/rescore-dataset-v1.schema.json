@@ -388,6 +388,7 @@
               "pack",
               "pack_musicxml",
               "issues",
+              "validation",
               "overrides",
               "comparison"
             ],
@@ -404,6 +405,7 @@
               "pack": {"$ref": "#/$defs/file"},
               "pack_musicxml": {"$ref": "#/$defs/file"},
               "issues": {"$ref": "#/$defs/file"},
+              "validation": {"$ref": "#/$defs/file"},
               "overrides": {"$ref": "#/$defs/file"},
               "comparison": {"$ref": "#/$defs/file"}
             }
