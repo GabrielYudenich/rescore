@@ -581,9 +581,119 @@ def validate_meter_score(score: dict, duration_for, require_full=None) -> dict:
     }
 
 
+def _repair_full_measure_leading_tuplet_rests(tree: ET.ElementTree) -> list[dict]:
+    """Turn a hidden exact spacer into the first visible member of a full-bar tuplet.
+
+    A common OMR pattern is a printed tuplet rest followed by pitched tuplet
+    members.  If the rest is lost, ``_emit_voice`` has historically written an
+    untyped hidden spacer.  MuseScore guesses a binary spelling for that spacer
+    and can shorten the bar during import.  The repair is deliberately narrow:
+    one stream must contain exactly ``actual-notes`` equal-duration members, fill
+    the complete measure, and begin with the only untyped hidden rest.
+    """
+
+    repairs: list[dict] = []
+
+    def remove_tuplet_marks(note: ET.Element) -> None:
+        notations = note.find("notations")
+        if notations is None:
+            return
+        for marker in list(notations.findall("tuplet")):
+            notations.remove(marker)
+        if not list(notations):
+            note.remove(notations)
+
+    def add_tuplet_mark(note: ET.Element, marker: str) -> None:
+        notations = note.find("notations")
+        if notations is None:
+            notations = ET.SubElement(note, "notations")
+        ET.SubElement(notations, "tuplet", {"type": marker, "bracket": "yes"})
+
+    for part in tree.getroot().findall("part"):
+        divisions = 1
+        beats = 4
+        beat_type = 4
+        for measure_index, measure in enumerate(part.findall("measure"), 1):
+            attributes = measure.find("attributes")
+            if attributes is not None:
+                divisions = int(attributes.findtext("divisions", str(divisions)))
+                time = attributes.find("time")
+                if time is not None:
+                    beats = int(time.findtext("beats", str(beats)))
+                    beat_type = int(time.findtext("beat-type", str(beat_type)))
+            expected_duration = Fraction(divisions * beats * 4, beat_type)
+            streams: dict[tuple[str, str], list[ET.Element]] = defaultdict(list)
+            for note in measure.findall("note"):
+                if note.find("chord") is not None or note.find("grace") is not None:
+                    continue
+                streams[(note.findtext("voice", "1"), note.findtext("staff", "1"))].append(note)
+            for (voice, staff), notes in streams.items():
+                if len(notes) < 2:
+                    continue
+                first = notes[0]
+                if (
+                    first.find("rest") is None
+                    or first.get("print-object") != "no"
+                    or first.find("type") is not None
+                ):
+                    continue
+                followers = notes[1:]
+                modifications = [note.find("time-modification") for note in followers]
+                if any(modification is None for modification in modifications):
+                    continue
+                ratios = {
+                    (
+                        modification.findtext("actual-notes"),
+                        modification.findtext("normal-notes"),
+                    )
+                    for modification in modifications
+                    if modification is not None
+                }
+                if len(ratios) != 1:
+                    continue
+                actual, _normal = next(iter(ratios))
+                if actual is None or int(actual) != len(notes):
+                    continue
+                durations = [note.findtext("duration") for note in notes]
+                if None in durations or len(set(durations)) != 1:
+                    continue
+                if (
+                    sum(Fraction(duration) for duration in durations if duration)
+                    != expected_duration
+                ):
+                    continue
+                note_type = followers[0].findtext("type")
+                if not note_type or any(note.findtext("type") != note_type for note in followers):
+                    continue
+
+                first.attrib.pop("print-object", None)
+                ET.SubElement(first, "type").text = note_type
+                first.insert(
+                    list(first).index(first.find("staff"))
+                    if first.find("staff") is not None
+                    else 3,
+                    copy.deepcopy(modifications[0]),
+                )
+                for note in notes:
+                    remove_tuplet_marks(note)
+                add_tuplet_mark(first, "start")
+                add_tuplet_mark(notes[-1], "stop")
+                repairs.append(
+                    {
+                        "part_id": part.get("id", ""),
+                        "measure": measure_index,
+                        "staff": staff,
+                        "voice": voice,
+                        "actual_notes": int(actual),
+                    }
+                )
+    return repairs
+
+
 def _write_and_validate(
     tree: ET.ElementTree, output: Path, duration_for, require_full=None
 ) -> dict:
+    tuplet_spacer_repairs = _repair_full_measure_leading_tuplet_rests(tree)
     output.parent.mkdir(parents=True, exist_ok=True)
     ET.indent(tree, space="  ")
     tree.write(output, encoding="utf-8", xml_declaration=True)
@@ -592,6 +702,7 @@ def _write_and_validate(
     )
     if not validation["valid"]:
         raise ValueError(f"validação métrica falhou: {validation['violations'][:3]}")
+    validation["tuplet_spacer_repairs"] = tuplet_spacer_repairs
     return validation
 
 

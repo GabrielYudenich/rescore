@@ -39,6 +39,8 @@ from .normalize import (
     build_movement1_complete,
     build_normalized_musicxml,
     build_scherzo_complete,
+    movement1_meter,
+    validate_meter_score,
 )
 from .pages import parse_page_spec
 from .pdf import images_to_tiff, pdf_info, render_pages
@@ -490,6 +492,29 @@ def convert_with_musescore(
             )
     if not destination.is_file():
         raise RuntimeError(f"MuseScore não criou {destination}")
+
+
+def validate_musescore_musicxml_roundtrip(
+    musescore: Path,
+    source_mscz: Path,
+    output_musicxml: Path,
+    log_path: Path,
+    duration_for,
+) -> dict:
+    """Validate the durations MuseScore itself exports from the delivered MSCZ.
+
+    Native MSCX duration arithmetic is not sufficient: the integrity checker
+    can reinterpret a malformed tuplet spacer only when it reconstructs the
+    score.  Exporting the final file back to MusicXML exposes that authoritative
+    interpretation and catches errors such as 47/96 in a 2/4 measure.
+    """
+    convert_with_musescore(musescore, source_mscz, output_musicxml, log_path)
+    validation = validate_meter_score(
+        parse_musicxml(output_musicxml, include_rests=True),
+        duration_for,
+    )
+    validation["musicxml"] = str(output_musicxml.resolve())
+    return validation
 
 
 def convert(
@@ -1058,6 +1083,20 @@ def assemble_movement1_pages_7_12(
     musescore_validation["automatic_beaming"] = automatic_beaming
     musescore_validation["padding_repairs"] = padding_repairs
     musescore_validation["open_save_validation"] = open_save_validation
+    roundtrip_xml = output_dir / "normalized-roundtrip.musicxml"
+    roundtrip_validation = validate_musescore_musicxml_roundtrip(
+        musescore,
+        normalized_mscz,
+        roundtrip_xml,
+        output_dir / "musescore-roundtrip.log",
+        lambda _part, measure: movement1_meter(measure)[2],
+    )
+    musescore_validation["musicxml_roundtrip_validation"] = roundtrip_validation
+    if not roundtrip_validation["valid"]:
+        raise ValueError(
+            "o MuseScore reinterpretou compassos do primeiro movimento com duração inválida: "
+            f"{roundtrip_validation['violations'][:4]}"
+        )
     musescore_validation_path = output_dir / "musescore-validation.json"
     musescore_validation_path.write_text(
         json.dumps(musescore_validation, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -1115,6 +1154,7 @@ def assemble_movement1_pages_7_12(
             "instrument_map": str(instrument_map.resolve()),
             "meter_validation": str(meter_validation_path.resolve()),
             "musescore_validation": str(musescore_validation_path.resolve()),
+            "musescore_roundtrip_musicxml": str(roundtrip_xml.resolve()),
         },
     }
     (output_dir / "manifest.json").write_text(
@@ -1322,6 +1362,20 @@ def assemble_movement1_complete(
     musescore_validation["automatic_beaming"] = automatic_beaming
     musescore_validation["padding_repairs"] = padding_repairs
     musescore_validation["open_save_validation"] = open_save_validation
+    roundtrip_xml = output_dir / "normalized-roundtrip.musicxml"
+    roundtrip_validation = validate_musescore_musicxml_roundtrip(
+        musescore,
+        normalized_mscz,
+        roundtrip_xml,
+        output_dir / "musescore-roundtrip.log",
+        lambda _part, measure: movement1_meter(measure)[2],
+    )
+    musescore_validation["musicxml_roundtrip_validation"] = roundtrip_validation
+    if not roundtrip_validation["valid"]:
+        raise ValueError(
+            "o MuseScore reinterpretou compassos do movimento completo com duração inválida: "
+            f"{roundtrip_validation['violations'][:4]}"
+        )
     musescore_validation_path = output_dir / "musescore-validation.json"
     musescore_validation_path.write_text(
         json.dumps(musescore_validation, ensure_ascii=False, indent=2),
@@ -1383,6 +1437,7 @@ def assemble_movement1_complete(
             "page_mapping_audit": str(page_audit_path.resolve()),
             "meter_validation": str(meter_validation_path.resolve()),
             "musescore_validation": str(musescore_validation_path.resolve()),
+            "musescore_roundtrip_musicxml": str(roundtrip_xml.resolve()),
         },
     }
     (output_dir / "manifest.json").write_text(

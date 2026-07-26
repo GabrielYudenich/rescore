@@ -170,6 +170,12 @@ descartadas por uma regra de tocabilidade permanecem visíveis no relatório, me
 quando ainda não existe associação segura o bastante para criar um formulário
 automaticamente.
 
+Quando `--musescore` é informado, o arquivo entregue é reexportado pelo próprio
+MuseScore para MusicXML antes da criação do projeto. Compassos incompletos, longos
+ou com início negativo bloqueiam a execução. Essa ida e volta é necessária porque
+uma estrutura MSCX aparentemente exata ainda pode ser reinterpretada pelo MuseScore
+ao abrir uma quiáltera mal formada.
+
 O dicionário pode ser consultado sem processar uma partitura:
 
 ```powershell

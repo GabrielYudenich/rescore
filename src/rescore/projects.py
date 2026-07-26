@@ -7,6 +7,7 @@ import html
 import json
 import re
 import shutil
+import tempfile
 import unicodedata
 from collections import Counter
 from datetime import UTC, datetime
@@ -116,6 +117,45 @@ def _read_upstream_diagnostics(source: Path | None) -> dict[str, Any]:
     }
 
 
+def _preflight_musescore_delivery(project_root: Path, source: Path) -> dict[str, Any]:
+    """Reject an MSCZ whose own MusicXML export contains incomplete/long bars."""
+    musescore = find_musescore(project_root)
+    if musescore is None:
+        raise FileNotFoundError("MuseScore não encontrado; execute `rescore doctor`")
+    with tempfile.TemporaryDirectory(prefix="rescore-mscz-roundtrip-") as temporary:
+        temporary_dir = Path(temporary)
+        roundtrip = temporary_dir / "roundtrip.musicxml"
+        convert_with_musescore(
+            musescore,
+            source,
+            roundtrip,
+            temporary_dir / "musescore.log",
+        )
+        detection = detect_score_issues(roundtrip, temporary_dir / "issues")
+        issues = [
+            json.loads(line)
+            for line in Path(detection["issues"]).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    critical_kinds = {"measure-incomplete", "measure-long", "negative-voice-start"}
+    critical = [issue for issue in issues if issue["kind"] in critical_kinds]
+    if critical:
+        locations = ", ".join(
+            f"compasso {issue['measure']} / {issue['possible_instrument']} / pauta {issue['staff']}"
+            for issue in critical[:8]
+        )
+        raise ValueError(
+            "o MSCZ não passou pela reexportação do próprio MuseScore: "
+            f"{len(critical)} erro(s) estrutural(is): {locations}"
+        )
+    return {
+        "valid": True,
+        "issues": len(issues),
+        "critical_issues": 0,
+        "by_kind": dict(sorted(Counter(issue["kind"] for issue in issues).items())),
+    }
+
+
 def _write_project_html(
     path: Path,
     *,
@@ -216,6 +256,12 @@ def create_review_project(
     score = score.resolve()
     if not score.is_file():
         raise FileNotFoundError(score)
+    delivery_roundtrip_validation = None
+    if musescore_score is not None:
+        musescore_score = musescore_score.resolve()
+        if not musescore_score.is_file():
+            raise FileNotFoundError(musescore_score)
+        delivery_roundtrip_validation = _preflight_musescore_delivery(project_root, musescore_score)
     output_root = output_root.resolve()
     project_dir = output_root / _slug(name)
     run_dir = project_dir / "runs" / _stamp()
@@ -354,6 +400,7 @@ def create_review_project(
         "copied_logs": copied_logs,
         "upstream_diagnostics": upstream_diagnostics,
         "deliveries": deliveries,
+        "delivery_roundtrip_validation": delivery_roundtrip_validation,
     }
     run_manifest_path = run_dir / "run.json"
     _write_json(run_manifest_path, run_manifest)

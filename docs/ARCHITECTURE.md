@@ -137,6 +137,12 @@ Uma fórmula fornecida pelo usuário funciona como restrição estrutural. O pro
 não deve alongar um compasso para acomodar eventos excedentes. Eventos ambíguos são
 registrados para revisão.
 
+A validação final não confia apenas nas durações internas do MSCX. O `.mscz`
+entregue é aberto e reexportado pelo próprio MuseScore para MusicXML, e essa
+representação reconstruída passa novamente pela auditoria de frações. Isso detecta
+casos em que uma pausa de quiáltera sem tipo escrito é adivinhada como valor binário
+e encurta o compasso somente durante a abertura.
+
 ## Associação instrumental
 
 A associação considera nome, abreviação, ordem vertical, clave e contexto do sistema.
@@ -212,6 +218,8 @@ formulários e logs; `project.json` aponta para a execução mais recente. A fon
 não é copiada e o diretório inteiro é ignorado pelo Git. O índice HTML diferencia
 erros estruturalmente localizados de diagnósticos de estágios anteriores, como
 grupos de acordes ambíguos ou alturas removidas por uma regra de tocabilidade.
+Se houver um `.mscz`, a mesma reexportação estrutural ocorre antes de qualquer
+diretório de projeto ser criado; uma entrega corrompida é recusada.
 
 ## Limite do sistema
 

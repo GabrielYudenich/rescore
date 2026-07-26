@@ -1,10 +1,12 @@
 import unittest
+import xml.etree.ElementTree as ET
 from fractions import Fraction
 
 from rescore.normalize import (
     MOVEMENT1_CLEF_CHANGES,
     _normalize_final_two_note_tremolos,
     _normalize_scherzo_tuplet_artifacts,
+    _repair_full_measure_leading_tuplet_rests,
     _restore_movement1_review_tuplets,
     _restore_verified_violin2_quintuplets,
     _scherzo_layout_for_page,
@@ -41,6 +43,53 @@ def event(part_id, pitch, onset="0", duration="1", staff="1"):
 
 
 class NormalizeTests(unittest.TestCase):
+    def test_repairs_full_bar_triplet_with_missing_leading_rest_notation(self):
+        root = ET.Element("score-partwise")
+        part = ET.SubElement(root, "part", {"id": "P34"})
+        measure = ET.SubElement(part, "measure", {"number": "23"})
+        attributes = ET.SubElement(measure, "attributes")
+        ET.SubElement(attributes, "divisions").text = "3360"
+        time = ET.SubElement(attributes, "time")
+        ET.SubElement(time, "beats").text = "2"
+        ET.SubElement(time, "beat-type").text = "4"
+        rest = ET.SubElement(measure, "note", {"print-object": "no"})
+        ET.SubElement(rest, "rest")
+        ET.SubElement(rest, "duration").text = "2240"
+        ET.SubElement(rest, "voice").text = "1"
+        ET.SubElement(rest, "staff").text = "1"
+        notes = [rest]
+        for pitch in ("C", "D"):
+            note = ET.SubElement(measure, "note")
+            pitch_node = ET.SubElement(note, "pitch")
+            ET.SubElement(pitch_node, "step").text = pitch
+            ET.SubElement(pitch_node, "octave").text = "4"
+            ET.SubElement(note, "duration").text = "2240"
+            ET.SubElement(note, "voice").text = "1"
+            ET.SubElement(note, "type").text = "quarter"
+            modification = ET.SubElement(note, "time-modification")
+            ET.SubElement(modification, "actual-notes").text = "3"
+            ET.SubElement(modification, "normal-notes").text = "2"
+            notations = ET.SubElement(note, "notations")
+            ET.SubElement(notations, "tuplet", {"type": "start", "bracket": "yes"})
+            ET.SubElement(notations, "tuplet", {"type": "stop", "bracket": "yes"})
+            ET.SubElement(note, "staff").text = "1"
+            notes.append(note)
+
+        repairs = _repair_full_measure_leading_tuplet_rests(ET.ElementTree(root))
+
+        self.assertEqual(repairs[0]["measure"], 1)
+        self.assertIsNone(rest.get("print-object"))
+        self.assertEqual(rest.findtext("type"), "quarter")
+        self.assertEqual(rest.findtext("time-modification/actual-notes"), "3")
+        self.assertEqual(
+            [marker.get("type") for marker in rest.findall("notations/tuplet")],
+            ["start"],
+        )
+        self.assertEqual(
+            [marker.get("type") for marker in notes[-1].findall("notations/tuplet")],
+            ["stop"],
+        )
+
     def test_scherzo_confirmed_meter_changes(self):
         self.assertEqual(scherzo_meter(26)[:2], (9, 8))
         self.assertEqual(scherzo_meter(74)[:2], (6, 8))

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from rescore.projects import create_review_project
+import pytest
+
+from rescore.projects import _preflight_musescore_delivery, create_review_project
 
 
 def _write_overfull_score(path: Path) -> None:
@@ -77,3 +80,21 @@ def test_review_project_organizes_outputs_and_correction_pack(
         "ambiguous_measures": [1],
         "empty_percussion_measures": 0,
     }
+
+
+def test_musescore_preflight_rejects_roundtrip_with_invalid_measure_duration(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    broken = tmp_path / "broken.musicxml"
+    source = tmp_path / "score.mscz"
+    _write_overfull_score(broken)
+    source.write_bytes(b"test placeholder")
+    monkeypatch.setattr("rescore.projects.find_musescore", lambda _root: Path("MuseScore"))
+
+    def fake_convert(_musescore, _source, destination, _log_path) -> None:
+        shutil.copy2(broken, destination)
+
+    monkeypatch.setattr("rescore.projects.convert_with_musescore", fake_convert)
+    with pytest.raises(ValueError, match="reexportação do próprio MuseScore"):
+        _preflight_musescore_delivery(tmp_path, source)
