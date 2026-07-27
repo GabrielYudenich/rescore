@@ -84,6 +84,33 @@ executável.
 
 ## Uso rápido
 
+Interface recomendada para gerar um PDF inteiro, detectar movimentos ou escolher
+um intervalo:
+
+```powershell
+python run.py --file "arquivo.pdf" --detect-movements true
+python run.py --file "arquivo.pdf" --detect-movements false
+python run.py --file "arquivo.pdf" --pages 1-20
+python run.py --file "arquivo.pdf" --pages 40-50
+```
+
+`--detect-movements true` é melhor para obras divididas em movimentos quando os
+títulos podem ser reconhecidos com segurança. `false` processa a obra como um fluxo
+contínuo. Para máxima previsibilidade, use `--pages`. A grafia
+`--detect-moviments`, usada nas primeiras conversas do projeto, também é aceita.
+
+Depois de editar `projects/<obra>/partitura.mscz` no MuseScore, reimporte todas as
+partituras corrigidas associadas ao PDF:
+
+```powershell
+python run.py --file "arquivo.pdf" --fix ok
+```
+
+Esse comando não executa OMR novamente. Ele reexporta o MSCZ corrigido para
+MusicXML/PDF, valida compassos e quiálteras pelo próprio MuseScore, cria uma nova
+execução em `runs/` e promove a correção para a raiz. O PDF é associado ao projeto
+por SHA-256, portanto renomear o arquivo não perde o vínculo.
+
 Converter páginas com fórmula conhecida:
 
 ```powershell
@@ -186,17 +213,25 @@ Nesta edição, os movimentos correspondem às páginas PDF 7-41, 42-66, 67-99 e
 100-200. O comando por movimento evita precisar memorizar esses limites:
 
 ```powershell
-python run.py --movement 1
-python run.py --movement 2
-python run.py --movement 3
-python run.py --movement 4
+python run.py --file "HVL_Sinfonia-n10-Sume-Pater-Patrium_partitura©ABM.pdf" `
+  --detect-movements true
+```
+
+Também é possível pedir um movimento específico, mantendo compatibilidade com a
+interface anterior:
+
+```powershell
+python run.py --file "partitura.pdf" --movement 1
+python run.py --file "partitura.pdf" --movement 2
+python run.py --file "partitura.pdf" --movement 3
+python run.py --file "partitura.pdf" --movement 4
 ```
 
 Para gerar, validar, organizar o histórico e publicar a versão atual na raiz do
 projeto, acrescente `--promote`:
 
 ```powershell
-python run.py --movement 1 --promote
+python run.py --file "partitura.pdf" --movement 1 --promote
 ```
 
 `--force` refaz o OMR; sem ele, o ReScore reaproveita candidatos existentes sempre
@@ -298,22 +333,23 @@ errado.
 
 ## Assistente `run.py`
 
-O arquivo `run.py` oferece um fluxo interativo e perfis experimentais para os casos
-orquestrais usados durante o desenvolvimento:
+O arquivo `run.py` oferece uma interface não interativa e perfis experimentais para
+os casos orquestrais usados durante o desenvolvimento:
 
 ```powershell
-python run.py --pdf "partitura.pdf" --pages 3 --meter 4/4
-python run.py --profile choros9 --pdf "grade-escaneada.pdf" --pages 3-10
-python run.py --profile choros9 --pdf "grade-escaneada.pdf" --pages 3 `
+python run.py --file "partitura.pdf" --pages 3 --meter 4/4
+python run.py --profile choros9 --file "grade-escaneada.pdf" --pages 3-10
+python run.py --profile choros9 --file "grade-escaneada.pdf" --pages 3 `
   --reference-mscz "referencia-manual.mscz"
 ```
 
-Sem `--pages`, ele pergunta o intervalo. O perfil de digitalização recupera as
-páginas separadamente para que uma página difícil não interrompa o lote, mas esse
-isolamento é apenas interno. Quando o intervalo contínuo começa na página 3 e existe
-uma referência manual, a entrega principal é uma única partitura com todos os
-compassos e um PDF A3 horizontal. Não fixe `--meter` em um intervalo que contenha
-mudanças de fórmula.
+Sem `--pages` e com a detecção desativada, ele processa todo o arquivo como obra
+contínua. O perfil do Choros ignora automaticamente as duas páginas iniciais. O
+perfil de digitalização recupera as páginas separadamente para que uma página
+difícil não interrompa o lote, mas esse isolamento é apenas interno. Quando o
+intervalo contínuo começa na página 3 e existe uma referência manual, a entrega
+principal é uma única partitura com todos os compassos e um PDF A3 horizontal. Não
+fixe `--meter` em um intervalo que contenha mudanças de fórmula.
 
 As páginas 3-7 do Choros 9 herdam a fórmula inicial 4/4. O pré-processamento
 também diferencia cunhas musicais normais de anotações manuscritas gigantes:

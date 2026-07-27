@@ -44,8 +44,12 @@ PDF
   teclado e trocas instrumentais em vários idiomas;
 - `issue_review.py`: detecta suspeitas estruturais e cria formulários métricos
   vazios para correção no MuseScore;
+- `movements.py`: detecta limites de movimentos somente por perfis verificados ou
+  títulos romanos digitais com evidência suficiente;
 - `projects.py`: cria execuções locais imutáveis com entregas, logs, diagnósticos e
   pacotes de correção;
+- `project_fix.py`: reimporta o `partitura.mscz` corrigido, reexporta MusicXML/PDF e
+  cria uma nova execução validada sem refazer o OMR;
 - `tooling.py`: localiza Audiveris e MuseScore.
 
 ## Alinhamento supervisionado

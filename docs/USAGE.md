@@ -27,6 +27,40 @@ rescore doctor
 Os números são as páginas do arquivo PDF, começando em 1, e não necessariamente a
 numeração impressa na partitura.
 
+### Interface principal do `run.py`
+
+Para escolher um trecho sem travar a fórmula de compasso:
+
+```powershell
+python run.py --file "arquivo.pdf" --pages 1-20
+python run.py --file "arquivo.pdf" --pages 40-50
+```
+
+Para uma obra completa:
+
+```powershell
+python run.py --file "arquivo.pdf" --detect-movements true
+python run.py --file "arquivo.pdf" --detect-movements false
+```
+
+- `true`: procura movimentos e cria uma conversão separada para cada um;
+- `false`: trata o arquivo como uma composição contínua;
+- sem `--pages`, o padrão também é `false`;
+- `--detect-moviments` é um alias tolerado, mas a documentação usa a grafia correta;
+- se não houver evidência suficiente para os movimentos, `true` para com uma
+  mensagem e recomenda `--pages` ou `false`;
+- `--meter` só deve ser usado em um intervalo cuja fórmula inteira tenha sido
+  confirmada. Sem ele, o ReScore preserva as fórmulas reconhecidas na fonte.
+
+Perfis verificados atualmente:
+
+- Sinfonia nº 10: quatro movimentos, páginas 7-41, 42-66, 67-99 e 100-200;
+- Choros nº 9: obra contínua, páginas musicais 3-134.
+
+Em PDFs digitais desconhecidos, títulos romanos centralizados (`I`, `II`, `III`...)
+podem fornecer os limites. O detector exige uma sequência completa começando em I;
+não cria movimentos por simples semelhança visual.
+
 ## 3. Renderizar para inspeção
 
 ```powershell
@@ -131,16 +165,40 @@ reexportação estrutural antes da promoção.
 ## 7.1. Movimentos completos da Sinfonia nº 10
 
 ```powershell
-python run.py --movement 1 --promote  # páginas 7-41
-python run.py --movement 2 --promote  # páginas 42-66
-python run.py --movement 3 --promote  # páginas 67-99
-python run.py --movement 4 --promote  # páginas 100-200
+python run.py --file "partitura.pdf" --movement 1 --promote  # páginas 7-41
+python run.py --file "partitura.pdf" --movement 2 --promote  # páginas 42-66
+python run.py --file "partitura.pdf" --movement 3 --promote  # páginas 67-99
+python run.py --file "partitura.pdf" --movement 4 --promote  # páginas 100-200
 ```
 
 Retire `--promote` quando quiser apenas gerar e inspecionar a saída em `output/`.
 Use `--force` somente quando quiser executar o OMR novamente. Os movimentos II e IV
 usam a leitura de fórmulas da própria fonte; não se aplica uma fórmula única a todo
 o intervalo.
+
+## 7.2. Rodar novamente depois de corrigir no MuseScore
+
+Edite a versão principal diretamente:
+
+```text
+projects/<obra>/partitura.mscz
+```
+
+Depois salve no MuseScore e execute:
+
+```powershell
+python run.py --file "arquivo.pdf" --fix ok
+```
+
+O ReScore localiza todos os projetos associados ao PDF pelo SHA-256, abre cada
+`partitura.mscz` corrigido com o MuseScore, reexporta MusicXML e PDF, executa o
+preflight estrutural, cria uma nova pasta imutável em `runs/` e atualiza os arquivos
+`partitura.*` da raiz. Se o arquivo estiver corrompido, tiver compassos longos ou
+incompletos, ou o projeto possuir `REPROVADO.txt`, a promoção é recusada.
+
+`--fix ok` é para a partitura principal completa. Correções dos pacotes curtos de
+treinamento continuam usando `rescore dataset-fix`, pois precisam preservar o mapa
+compasso × pauta e o nome do revisor.
 
 ## 8. Processar uma grade escaneada
 
@@ -149,7 +207,7 @@ O assistente inclui um perfil experimental:
 ```powershell
 python run.py `
   --profile choros9 `
-  --pdf "grade-escaneada.pdf" `
+  --file "grade-escaneada.pdf" `
   --pages 3-10 `
   --dpi 300
 ```
@@ -159,7 +217,7 @@ Com uma abertura transcrita manualmente:
 ```powershell
 python run.py `
   --profile choros9 `
-  --pdf "grade-escaneada.pdf" `
+  --file "grade-escaneada.pdf" `
   --pages 3 `
   --reference-mscz "referencia-manual.mscz"
 ```
@@ -179,7 +237,7 @@ Para validar a abertura confirmada em 4/4 e o filtro de anotações:
 ```powershell
 python run.py `
   --profile choros9 `
-  --pdf "Choros N9 (Grade).pdf" `
+  --file "Choros N9 (Grade).pdf" `
   --pages 3-7
 ```
 
