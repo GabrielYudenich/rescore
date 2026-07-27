@@ -1,0 +1,3 @@
+# Instala o ReScore em modo editável e usa as dependências de execução
+# declaradas no pyproject.toml como fonte única de verdade.
+-e .

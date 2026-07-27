@@ -1,5 +1,9 @@
 # Guia de uso
 
+Antes do primeiro uso, crie o ambiente e instale o projeto com
+`python -m pip install -r requirements.txt`, conforme o README. O arquivo
+`requirements-dev.txt` acrescenta somente as ferramentas de desenvolvimento.
+
 ## 1. Verificar o ambiente
 
 ```powershell
@@ -149,7 +153,7 @@ quantos compassos suspeitos entram em cada pacote. O PDF fonte não é duplicado
 
 Se `rescore` não estiver no `PATH` do PowerShell, ative o ambiente e use o executável
 diretamente, por exemplo `.\.venv\Scripts\rescore.exe doctor`, ou reinstale o projeto
-com `.\.venv\Scripts\python.exe -m pip install -e .`.
+com `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`.
 
 Uma execução revisada pode virar a versão principal do projeto:
 

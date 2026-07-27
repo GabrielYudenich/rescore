@@ -65,7 +65,7 @@ PowerShell:
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\rescore.exe doctor
 ```
 
@@ -74,9 +74,14 @@ Linux ou macOS:
 ```bash
 python3.11 -m venv .venv
 ./.venv/bin/python -m pip install --upgrade pip
-./.venv/bin/python -m pip install -e .
+./.venv/bin/python -m pip install -r requirements.txt
 ./.venv/bin/rescore doctor
 ```
+
+O `requirements.txt` instala o projeto em modo editável e reutiliza as dependências
+de execução declaradas no `pyproject.toml`. Para contribuir com código e executar
+as ferramentas de desenvolvimento, use `requirements-dev.txt`. Audiveris e
+MuseScore continuam sendo instalações externas ao Python.
 
 O comando `doctor` mostra os caminhos e as versões detectadas. Se uma ferramenta não
 for encontrada, defina a variável correspondente com o caminho completo do
@@ -462,10 +467,13 @@ Consulte [Arquitetura](docs/ARCHITECTURE.md) para entender o pipeline e
 ## Desenvolvimento
 
 ```powershell
-$env:PYTHONPATH = "src"
-python -m unittest discover -s tests -v
-python -m compileall -q src run.py
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m compileall -q src run.py
 ```
+
+Para mudar de computador sem copiar ambientes e saídas reproduzíveis, consulte
+[Backup e migração](docs/BACKUP.md).
 
 Partituras, PDFs, imagens de referência, projetos OMR/MuseScore, saídas e anotações
 locais são ignorados pelo Git. Os testes que dependem de uma referência privada são
