@@ -1,4 +1,4 @@
--r requirements.txt
+-e .[hub,hub-dev]
 
 # Ferramentas usadas para validar contribuições locais.
 pytest>=8,<10

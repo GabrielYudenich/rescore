@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .alignment import align_dataset_item, validate_alignment
+from .community import prepare_contribution, submit_contribution
 from .dataset import (
     add_pair,
     initialize_dataset,
@@ -336,6 +337,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="confirma a ordem dos compassos quando o MuseScore removeu todos os IDs visíveis",
     )
+    community_prepare = subparsers.add_parser(
+        "community-prepare", help="prepara localmente uma contribuição pública conferida"
+    )
+    community_prepare.add_argument("--output", type=Path, required=True)
+    community_prepare.add_argument("--file", action="append", required=True)
+    community_prepare.add_argument("--source-license", required=True)
+    community_prepare.add_argument("--annotation-license", required=True)
+    community_prepare.add_argument(
+        "--verification", choices=("human-reviewed", "human-transcribed"), required=True
+    )
+    community_prepare.add_argument("--contributor", default="anonymous")
+    community_prepare.add_argument("--confirm-share", action="store_true")
+
+    community_submit = subparsers.add_parser(
+        "community-submit", help="envia um pacote conferido ao hub"
+    )
+    community_submit.add_argument("package", type=Path)
+    community_submit.add_argument("--endpoint", required=True)
     return parser
 
 
@@ -517,6 +536,26 @@ def main(argv: list[str] | None = None) -> int:
                 target_map=_parse_target_maps(args.map),
                 confirm_order=args.confirm_order,
             )
+        elif args.command == "community-prepare":
+            if not args.confirm_share:
+                raise ValueError("use --confirm-share após conferir arquivos e direitos")
+            files = []
+            for value in args.file:
+                try:
+                    role, path = value.split("=", 1)
+                except ValueError as exc:
+                    raise ValueError("arquivo inválido; use PAPEL=ARQUIVO") from exc
+                files.append((role, Path(path)))
+            result = prepare_contribution(
+                args.output,
+                files=files,
+                source_license=args.source_license,
+                annotation_license=args.annotation_license,
+                verification=args.verification,
+                contributor=args.contributor,
+            )
+        elif args.command == "community-submit":
+            result = submit_contribution(args.package, args.endpoint)
         else:
             parser.error(f"comando desconhecido: {args.command}")
             return 2
