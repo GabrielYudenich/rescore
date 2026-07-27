@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Ferramentas usadas para validar contribuições locais.
+pytest>=8,<10
+ruff>=0.12,<1

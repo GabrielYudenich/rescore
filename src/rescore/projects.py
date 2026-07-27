@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import os
 import re
 import shutil
 import tempfile
@@ -81,6 +82,29 @@ def _copy_score_to_musicxml(project_root: Path, source: Path, destination: Path)
 
 def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _atomic_copy(source: Path, destination: Path) -> None:
+    """Copy one artifact without ever exposing a partially written current file."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{_stamp()}.tmp")
+    try:
+        shutil.copy2(source, temporary)
+        os.replace(temporary, destination)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _atomic_write_text(path: Path, value: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{_stamp()}.tmp")
+    try:
+        temporary.write_text(value, encoding="utf-8")
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
 
 
 def _copy_logs(source: Path | None, destination: Path) -> list[dict[str, Any]]:
@@ -171,6 +195,7 @@ def _write_project_html(
         f'<li><a href="{html.escape(item["path"])}">{html.escape(item["label"])}</a></li>'
         for item in artifacts
     )
+
     pack_items = (
         "".join(
             "<li>"
@@ -233,6 +258,161 @@ th,td{{border:1px solid #d8d2c7;padding:8px;text-align:left}}a{{color:#075f56}}
 {instrument_rows}</table></body></html>""",
         encoding="utf-8",
     )
+
+
+def _write_current_project_html(
+    path: Path,
+    *,
+    name: str,
+    promoted_run: str,
+    promoted_at: str,
+    artifacts: dict[str, dict[str, Any]],
+) -> None:
+    artifact_items = "".join(
+        f'<li><a href="{html.escape(item["path"])}">{html.escape(label)}</a></li>'
+        for label, item in artifacts.items()
+    )
+    run_index = f"{promoted_run}/index.html"
+    payload = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{html.escape(name)} - versão atual</title><style>
+body{{font-family:Segoe UI,sans-serif;max-width:850px;margin:40px auto;padding:0 20px;
+background:#f5f2ec;color:#202825}}main{{background:white;border:1px solid #d8d2c7;
+border-radius:10px;padding:24px}}h1{{color:#173a37}}a{{color:#075f56}}
+</style></head><body><main><h1>{html.escape(name)}</h1>
+<p>Esta é a versão atual aprovada do projeto.</p><ul>{artifact_items}</ul>
+<p><a href="{html.escape(run_index)}">Abrir relatório completo da execução promovida</a></p>
+<p>Promovida em {html.escape(promoted_at)}. O histórico permanece em <code>runs/</code>.</p>
+</main></body></html>"""
+    _atomic_write_text(path, payload)
+
+
+def _write_project_readme(project_dir: Path, *, promoted_run: str | None) -> None:
+    if promoted_run:
+        instructions = (
+            "Abra index.html para acessar a versão atual aprovada.\n"
+            "Os arquivos partitura.* disponíveis são cópias estáveis da execução promovida.\n"
+            f"Execução promovida: {promoted_run}\n"
+        )
+    else:
+        instructions = (
+            "Ainda não existe uma versão promovida na raiz.\n"
+            "Abra o index.html dentro da pasta indicada por latest_run em project.json.\n"
+        )
+    (project_dir / "LEIA-ME.txt").write_text(
+        "ReScore - projeto de revisão\n\n"
+        f"{instructions}"
+        "As execuções históricas ficam em runs/ e não são sobrescritas.\n"
+        "A fonte PDF não é copiada; somente seu caminho e hash ficam no manifesto local.\n",
+        encoding="utf-8",
+    )
+
+
+def _resolve_project_run(
+    project_dir: Path,
+    project_manifest: dict[str, Any],
+    requested_run: str | Path | None,
+) -> Path:
+    if requested_run is None:
+        latest_run = project_manifest.get("latest_run")
+        if not latest_run:
+            raise ValueError("o projeto não possui uma execução em latest_run")
+        requested = Path(latest_run)
+    else:
+        requested = Path(requested_run)
+    if requested.is_absolute():
+        run_dir = requested.resolve()
+    elif requested.parts and requested.parts[0].casefold() == "runs":
+        run_dir = (project_dir / requested).resolve()
+    else:
+        run_dir = (project_dir / "runs" / requested).resolve()
+    runs_dir = (project_dir / "runs").resolve()
+    if not run_dir.is_relative_to(runs_dir) or run_dir == runs_dir:
+        raise ValueError("a execução precisa estar dentro da pasta runs/ do projeto")
+    if not (run_dir / "run.json").is_file():
+        raise FileNotFoundError(f"manifesto da execução não encontrado: {run_dir / 'run.json'}")
+    return run_dir
+
+
+def promote_project_run(
+    project_dir: Path,
+    *,
+    run: str | Path | None = None,
+) -> dict[str, Any]:
+    """Publish an explicitly approved run as stable root-level project artifacts."""
+    project_dir = project_dir.resolve()
+    project_manifest_path = project_dir / "project.json"
+    if not project_manifest_path.is_file():
+        raise FileNotFoundError(f"projeto ReScore não encontrado: {project_manifest_path}")
+    project_manifest = json.loads(project_manifest_path.read_text(encoding="utf-8"))
+    run_dir = _resolve_project_run(project_dir, project_manifest, run)
+    for rejection_marker in (project_dir / "REPROVADO.txt", run_dir / "REPROVADO.txt"):
+        if rejection_marker.is_file():
+            raise ValueError(
+                "a execução está marcada como reprovada e não pode ser promovida: "
+                f"{rejection_marker}"
+            )
+
+    run_manifest = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    source_artifacts: dict[str, Path] = {
+        "MusicXML editável": run_dir / "entrada" / "partitura.musicxml",
+    }
+    optional_artifacts = {
+        "Partitura MuseScore": run_dir / "entregas" / "partitura.mscz",
+        "PDF de conferência": run_dir / "entregas" / "partitura.pdf",
+    }
+    source_artifacts.update(
+        {label: source for label, source in optional_artifacts.items() if source.is_file()}
+    )
+    missing = [str(source) for source in source_artifacts.values() if not source.is_file()]
+    if missing:
+        raise FileNotFoundError(f"artefato obrigatório ausente: {', '.join(missing)}")
+
+    if "Partitura MuseScore" in source_artifacts:
+        validation = run_manifest.get("delivery_roundtrip_validation")
+        if not isinstance(validation, dict) or not validation.get("valid"):
+            raise ValueError("a entrega MuseScore não possui uma validação de ida e volta aprovada")
+        if int(validation.get("critical_issues", 0)) != 0:
+            raise ValueError("a entrega MuseScore possui erros estruturais críticos")
+
+    destinations = {
+        "MusicXML editável": project_dir / "partitura.musicxml",
+        "Partitura MuseScore": project_dir / "partitura.mscz",
+        "PDF de conferência": project_dir / "partitura.pdf",
+    }
+    for label, source in source_artifacts.items():
+        _atomic_copy(source, destinations[label])
+    for label, destination in destinations.items():
+        if label not in source_artifacts and destination.exists():
+            destination.unlink()
+
+    promoted_at = _now()
+    artifact_records = {
+        label: _record(destinations[label], project_dir) for label in source_artifacts
+    }
+    promoted_run = run_dir.relative_to(project_dir).as_posix()
+    _write_current_project_html(
+        project_dir / "index.html",
+        name=project_manifest["name"],
+        promoted_run=promoted_run,
+        promoted_at=promoted_at,
+        artifacts=artifact_records,
+    )
+    project_manifest["promoted_run"] = promoted_run
+    project_manifest["promoted_at"] = promoted_at
+    project_manifest["current_artifacts"] = artifact_records
+    _atomic_write_text(
+        project_manifest_path,
+        json.dumps(project_manifest, ensure_ascii=False, indent=2) + "\n",
+    )
+    _write_project_readme(project_dir, promoted_run=promoted_run)
+    return {
+        "project": str(project_dir),
+        "promoted_run": str(run_dir),
+        "index": str(project_dir / "index.html"),
+        "artifacts": {label: str(destinations[label]) for label in source_artifacts},
+        "validation": run_manifest.get("delivery_roundtrip_validation"),
+    }
 
 
 def create_review_project(
@@ -438,13 +618,7 @@ def create_review_project(
         }
     )
     _write_json(project_manifest_path, previous)
-    (project_dir / "LEIA-ME.txt").write_text(
-        "ReScore - projeto de revisão\n\n"
-        "Abra o arquivo index.html dentro da pasta indicada por latest_run em project.json.\n"
-        "As partituras editáveis ficam em entregas/ e os formulários em correcoes/.\n"
-        "A fonte PDF não é copiada; somente seu caminho e hash ficam no manifesto local.\n",
-        encoding="utf-8",
-    )
+    _write_project_readme(project_dir, promoted_run=previous.get("promoted_run"))
     return {
         "project": str(project_dir),
         "run": str(run_dir),

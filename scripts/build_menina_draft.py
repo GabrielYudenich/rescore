@@ -8,10 +8,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from rescore.manuscript import recognize_menina_image_directory
-from rescore.mscz import set_page_layout, validate_meter_map_mscz
-from rescore.pipeline import convert_with_musescore
-from rescore.tooling import find_musescore
+from rescore.manuscript import recognize_menina_image_directory  # noqa: E402
+from rescore.mscz import set_page_layout, validate_meter_map_mscz  # noqa: E402
+from rescore.pipeline import convert_with_musescore  # noqa: E402
+from rescore.tooling import find_musescore  # noqa: E402
 
 
 def _parser() -> argparse.ArgumentParser:

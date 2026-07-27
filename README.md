@@ -65,7 +65,7 @@ PowerShell:
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\rescore.exe doctor
 ```
 
@@ -74,15 +74,47 @@ Linux ou macOS:
 ```bash
 python3.11 -m venv .venv
 ./.venv/bin/python -m pip install --upgrade pip
-./.venv/bin/python -m pip install -e .
+./.venv/bin/python -m pip install -r requirements.txt
 ./.venv/bin/rescore doctor
 ```
+
+O `requirements.txt` instala o projeto em modo editável e reutiliza as dependências
+de execução declaradas no `pyproject.toml`. Para contribuir com código e executar
+as ferramentas de desenvolvimento, use `requirements-dev.txt`. Audiveris e
+MuseScore continuam sendo instalações externas ao Python.
 
 O comando `doctor` mostra os caminhos e as versões detectadas. Se uma ferramenta não
 for encontrada, defina a variável correspondente com o caminho completo do
 executável.
 
 ## Uso rápido
+
+Interface recomendada para gerar um PDF inteiro, detectar movimentos ou escolher
+um intervalo:
+
+```powershell
+python run.py --file "arquivo.pdf" --detect-movements true
+python run.py --file "arquivo.pdf" --detect-movements false
+python run.py --file "arquivo.pdf" --pages 1-20
+python run.py --file "arquivo.pdf" --pages 40-50
+```
+
+`--detect-movements true` é melhor para obras divididas em movimentos quando os
+títulos podem ser reconhecidos com segurança. `false` processa a obra como um fluxo
+contínuo. Para máxima previsibilidade, use `--pages`. A grafia
+`--detect-moviments`, usada nas primeiras conversas do projeto, também é aceita.
+
+Depois de editar `projects/<obra>/partitura.mscz` no MuseScore, reimporte todas as
+partituras corrigidas associadas ao PDF:
+
+```powershell
+python run.py --file "arquivo.pdf" --fix ok
+```
+
+Esse comando não executa OMR novamente. Ele reexporta o MSCZ corrigido para
+MusicXML/PDF, valida compassos e quiálteras pelo próprio MuseScore, cria uma nova
+execução em `runs/` e promove a correção para a raiz. O PDF é associado ao projeto
+por SHA-256, portanto renomear o arquivo não perde o vínculo.
 
 Converter páginas com fórmula conhecida:
 
@@ -138,6 +170,7 @@ rescore review-pack candidato.musicxml --issues output/problemas/issues.jsonl --
 rescore instrument "Célesta — portée inférieure"
 rescore instrument-catalog --output output/instrumentos.json
 rescore project-review "Minha obra" --score candidato.musicxml --source-pdf fonte.pdf --pages 3-6
+rescore project-promote projects/minha-obra
 rescore dataset-fix data/meu-conjunto --id meu-item --pack output/correcoes/review-pack.json --corrected output/correcoes/review-pack.mscz --reviewer "Nome"
 ```
 
@@ -155,14 +188,60 @@ rescore project-review "Sinfonia - primeiro movimento" `
   --score-pdf output/movimento/normalized.pdf `
   --source-pdf "fonte.pdf" `
   --pages 7-41 `
-  --artifacts-dir output/movimento
+  --artifacts-dir output/movimento `
+  --promote
 ```
 
-Abra o `index.html` da execução indicada por `latest_run` em `project.json`. A pasta
-contém `entrada/`, `entregas/`, `issues/`, `correcoes/` e `logs/`, além de um
-`run.json` com caminhos, hashes e contagens. O PDF fonte não é copiado: somente o
-caminho local, o tamanho e o hash entram no manifesto. `projects/` é ignorada pelo
-Git para evitar publicar partituras ou fontes particulares por acidente.
+Com `--promote`, a raiz do projeto recebe `partitura.mscz`, `partitura.musicxml`,
+`partitura.pdf` e `index.html`. Esses arquivos representam a versão atual aprovada.
+A pasta `runs/` preserva todas as execuções; uma leitura marcada com `REPROVADO.txt`
+não pode substituir a versão atual. A cópia é atômica, adequada ao Windows, e a
+entrega MuseScore só é promovida depois de passar pela reexportação estrutural.
+
+Também é possível aprovar depois de revisar uma execução:
+
+```powershell
+rescore project-promote projects/sinfonia-10-primeiro-movimento
+rescore project-promote projects/sinfonia-10-primeiro-movimento `
+  --run 20260726T203443339073Z
+```
+
+Sem `--run`, o comando usa `latest_run`. Cada execução contém `entrada/`,
+`entregas/`, `issues/`, `correcoes/` e `logs/`, além de um `run.json` com caminhos,
+hashes e contagens. O PDF fonte não é copiado: somente o caminho local, o tamanho e
+o hash entram no manifesto. `projects/` é ignorada pelo Git para evitar publicar
+partituras ou fontes particulares por acidente.
+
+## Gerar movimentos completos da Sinfonia nº 10
+
+Nesta edição, os movimentos correspondem às páginas PDF 7-41, 42-66, 67-99 e
+100-200. O comando por movimento evita precisar memorizar esses limites:
+
+```powershell
+python run.py --file "HVL_Sinfonia-n10-Sume-Pater-Patrium_partitura©ABM.pdf" `
+  --detect-movements true
+```
+
+Também é possível pedir um movimento específico, mantendo compatibilidade com a
+interface anterior:
+
+```powershell
+python run.py --file "partitura.pdf" --movement 1
+python run.py --file "partitura.pdf" --movement 2
+python run.py --file "partitura.pdf" --movement 3
+python run.py --file "partitura.pdf" --movement 4
+```
+
+Para gerar, validar, organizar o histórico e publicar a versão atual na raiz do
+projeto, acrescente `--promote`:
+
+```powershell
+python run.py --file "partitura.pdf" --movement 1 --promote
+```
+
+`--force` refaz o OMR; sem ele, o ReScore reaproveita candidatos existentes sempre
+que o perfil permitir. Os movimentos II e IV ainda usam o pipeline genérico: suas
+fórmulas são lidas da fonte e não recebem uma métrica fixa inventada.
 
 O painel separa problemas estruturais — que geram pacote de correção — de
 diagnósticos anteriores da normalização. Por exemplo, acordes ambíguos e alturas
@@ -259,22 +338,23 @@ errado.
 
 ## Assistente `run.py`
 
-O arquivo `run.py` oferece um fluxo interativo e perfis experimentais para os casos
-orquestrais usados durante o desenvolvimento:
+O arquivo `run.py` oferece uma interface não interativa e perfis experimentais para
+os casos orquestrais usados durante o desenvolvimento:
 
 ```powershell
-python run.py --pdf "partitura.pdf" --pages 3 --meter 4/4
-python run.py --profile choros9 --pdf "grade-escaneada.pdf" --pages 3-10
-python run.py --profile choros9 --pdf "grade-escaneada.pdf" --pages 3 `
+python run.py --file "partitura.pdf" --pages 3 --meter 4/4
+python run.py --profile choros9 --file "grade-escaneada.pdf" --pages 3-10
+python run.py --profile choros9 --file "grade-escaneada.pdf" --pages 3 `
   --reference-mscz "referencia-manual.mscz"
 ```
 
-Sem `--pages`, ele pergunta o intervalo. O perfil de digitalização recupera as
-páginas separadamente para que uma página difícil não interrompa o lote, mas esse
-isolamento é apenas interno. Quando o intervalo contínuo começa na página 3 e existe
-uma referência manual, a entrega principal é uma única partitura com todos os
-compassos e um PDF A3 horizontal. Não fixe `--meter` em um intervalo que contenha
-mudanças de fórmula.
+Sem `--pages` e com a detecção desativada, ele processa todo o arquivo como obra
+contínua. O perfil do Choros ignora automaticamente as duas páginas iniciais. O
+perfil de digitalização recupera as páginas separadamente para que uma página
+difícil não interrompa o lote, mas esse isolamento é apenas interno. Quando o
+intervalo contínuo começa na página 3 e existe uma referência manual, a entrega
+principal é uma única partitura com todos os compassos e um PDF A3 horizontal. Não
+fixe `--meter` em um intervalo que contenha mudanças de fórmula.
 
 As páginas 3-7 do Choros 9 herdam a fórmula inicial 4/4. O pré-processamento
 também diferencia cunhas musicais normais de anotações manuscritas gigantes:
@@ -387,10 +467,13 @@ Consulte [Arquitetura](docs/ARCHITECTURE.md) para entender o pipeline e
 ## Desenvolvimento
 
 ```powershell
-$env:PYTHONPATH = "src"
-python -m unittest discover -s tests -v
-python -m compileall -q src run.py
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m compileall -q src run.py
 ```
+
+Para mudar de computador sem copiar ambientes e saídas reproduzíveis, consulte
+[Backup e migração](docs/BACKUP.md).
 
 Partituras, PDFs, imagens de referência, projetos OMR/MuseScore, saídas e anotações
 locais são ignorados pelo Git. Os testes que dependem de uma referência privada são
