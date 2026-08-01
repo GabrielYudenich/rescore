@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .alignment import align_dataset_item, validate_alignment
 from .community import prepare_contribution, submit_contribution
+from .corpus import build_anonymous_inventory
 from .dataset import (
     add_pair,
     initialize_dataset,
@@ -355,6 +356,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     community_submit.add_argument("package", type=Path)
     community_submit.add_argument("--endpoint", required=True)
+
+    corpus_inventory = subparsers.add_parser(
+        "corpus-inventory", help="inventaria um corpus local sem publicar nomes ou caminhos"
+    )
+    corpus_inventory.add_argument("source", type=Path)
+    corpus_inventory.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -556,6 +563,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "community-submit":
             result = submit_contribution(args.package, args.endpoint)
+        elif args.command == "corpus-inventory":
+            result = build_anonymous_inventory(args.source, args.output)
         else:
             parser.error(f"comando desconhecido: {args.command}")
             return 2
