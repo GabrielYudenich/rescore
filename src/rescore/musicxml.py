@@ -227,6 +227,17 @@ def _event_key(event: dict, part_sensitive: bool) -> tuple:
     return (event["part_key"], *common) if part_sensitive else common
 
 
+def _position_event_key(event: dict, positions: dict[str, int]) -> tuple:
+    return (
+        positions[event["part_id"]],
+        event["measure_index"],
+        event["onset"],
+        event["duration"],
+        event["pitch"],
+        event["grace"],
+    )
+
+
 def _metric(reference: Counter, candidate: Counter) -> dict:
     matched = sum((reference & candidate).values())
     reference_count = sum(reference.values())
@@ -251,6 +262,18 @@ def compare_scores(reference: dict, candidate: dict, sample_limit: int = 30) -> 
     global_candidate = Counter(_event_key(event, False) for event in candidate_events)
     part_reference = Counter(_event_key(event, True) for event in reference_events)
     part_candidate = Counter(_event_key(event, True) for event in candidate_events)
+    reference_positions = {
+        part["id"]: position for position, part in enumerate(reference["parts"], start=1)
+    }
+    candidate_positions = {
+        part["id"]: position for position, part in enumerate(candidate["parts"], start=1)
+    }
+    position_reference = Counter(
+        _position_event_key(event, reference_positions) for event in reference_events
+    )
+    position_candidate = Counter(
+        _position_event_key(event, candidate_positions) for event in candidate_events
+    )
 
     missing = list((global_reference - global_candidate).elements())[:sample_limit]
     extra = list((global_candidate - global_reference).elements())[:sample_limit]
@@ -270,6 +293,7 @@ def compare_scores(reference: dict, candidate: dict, sample_limit: int = 30) -> 
             "measures": candidate["measures"],
         },
         "global_note_rhythm": _metric(global_reference, global_candidate),
+        "staff_position_note_rhythm": _metric(position_reference, position_candidate),
         "instrument_note_rhythm": _metric(part_reference, part_candidate),
         "part_names": {
             "common": sorted(reference_parts & candidate_parts),
@@ -280,6 +304,7 @@ def compare_scores(reference: dict, candidate: dict, sample_limit: int = 30) -> 
         "extra_global_event_sample": [list(item) for item in extra],
         "interpretation": (
             "A métrica global ignora o instrumento e mede nota+ritmo. "
-            "A métrica por instrumento também exige que a parte tenha o mesmo nome normalizado."
+            "A métrica por posição associa partes pela ordem vertical, sem nomes. "
+            "A métrica por instrumento exige o mesmo nome normalizado."
         ),
     }

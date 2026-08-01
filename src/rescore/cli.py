@@ -27,9 +27,10 @@ from .mscz import inspect_mscz
 from .musicxml import compare_scores, parse_musicxml, write_canonical
 from .normalize import build_normalized_musicxml
 from .pdf import pdf_info, render_pages
-from .pipeline import convert
+from .pipeline import convert, extract_image_omr_candidate
 from .projects import create_review_project, promote_project_run
 from .review import review_dataset_alignment
+from .score_slice import slice_musicxml
 from .staff_alignment import align_dataset_staffs, validate_staff_alignment
 from .tooling import doctor
 from .training_export import export_training_samples, validate_training_export
@@ -94,6 +95,27 @@ def build_parser() -> argparse.ArgumentParser:
     compare_parser.add_argument("reference", type=Path)
     compare_parser.add_argument("candidate", type=Path)
     compare_parser.add_argument("--output", type=Path)
+
+    slice_parser = subparsers.add_parser(
+        "score-slice",
+        help="extrai um intervalo autônomo de compassos para benchmark",
+    )
+    slice_parser.add_argument("score", type=Path)
+    slice_parser.add_argument("--start", type=int, required=True)
+    slice_parser.add_argument("--end", type=int, required=True)
+    slice_parser.add_argument("--output", type=Path, required=True)
+
+    image_omr_parser = subparsers.add_parser(
+        "omr-image", help="reconhece diretamente uma imagem JPG, PNG ou TIFF"
+    )
+    image_omr_parser.add_argument("image", type=Path)
+    image_omr_parser.add_argument("--output", type=Path, required=True)
+    image_omr_parser.add_argument("--force", action="store_true")
+    image_omr_parser.add_argument(
+        "--scan-profile",
+        action="store_true",
+        help="ativa o perfil experimental especializado para grades escaneadas",
+    )
 
     normalize_parser = subparsers.add_parser(
         "normalize-scherzo", help="expande o OMR condensado para o modelo orquestral"
@@ -399,6 +421,16 @@ def main(argv: list[str] | None = None) -> int:
                 args.output.write_text(
                     json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
                 )
+        elif args.command == "score-slice":
+            result = slice_musicxml(args.score, args.output, args.start, args.end)
+        elif args.command == "omr-image":
+            result = extract_image_omr_candidate(
+                project_root,
+                args.image,
+                args.output,
+                force=args.force,
+                scan_profile=args.scan_profile,
+            )
         elif args.command == "normalize-scherzo":
             result = build_normalized_musicxml(args.candidate, args.template, args.output)
         elif args.command == "convert":

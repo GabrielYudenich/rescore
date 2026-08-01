@@ -14,6 +14,7 @@ from .choros9 import (
     merge_measure_candidates,
     replace_choros9_family_parts,
 )
+from .images import prepare_omr_image
 from .mscz import (
     extract_score_style,
     graft_reference_measures,
@@ -53,6 +54,9 @@ from .scan import (
     suppress_cross_staff_annotations,
 )
 from .tooling import find_audiveris, find_musescore
+
+AUDIVERIS_MAX_PIXELS = 50_000_000
+OMR_RENDER_MAX_PIXELS = 48_000_000
 
 
 def _run_logged(command: list[str], log_path: Path, cwd: Path) -> subprocess.CompletedProcess:
@@ -97,7 +101,7 @@ def run_audiveris(
         str(audiveris),
         "-batch",
         "-constant",
-        "org.audiveris.omr.step.LoadStep.maxPixelCount=50000000",
+        f"org.audiveris.omr.step.LoadStep.maxPixelCount={AUDIVERIS_MAX_PIXELS}",
     ]
     for key, value in sorted((constants or {}).items()):
         command.extend(["-constant", f"{key}={value}"])
@@ -386,8 +390,23 @@ def _render_omr_pages(
     scan_profile: bool,
 ) -> tuple[list[Path], list[dict]]:
     if not scan_profile:
-        return render_pages(pdf_path, page_spec, output_dir / "pages", dpi=dpi), []
-    raw_pages = render_pages(pdf_path, page_spec, output_dir / "pages-raw", dpi=dpi)
+        return (
+            render_pages(
+                pdf_path,
+                page_spec,
+                output_dir / "pages",
+                dpi=dpi,
+                max_pixels=OMR_RENDER_MAX_PIXELS,
+            ),
+            [],
+        )
+    raw_pages = render_pages(
+        pdf_path,
+        page_spec,
+        output_dir / "pages-raw",
+        dpi=dpi,
+        max_pixels=OMR_RENDER_MAX_PIXELS,
+    )
     processed = []
     reports = []
     for raw_page in raw_pages:
@@ -442,6 +461,44 @@ def extract_omr_candidate(
     if not candidates:
         raise RuntimeError("Audiveris terminou sem produzir arquivo .mxl")
     return max(candidates, key=lambda item: item.stat().st_mtime)
+
+
+def extract_image_omr_candidate(
+    project_root: Path,
+    image_path: Path,
+    output_dir: Path,
+    *,
+    force: bool = False,
+    scan_profile: bool = False,
+) -> dict[str, object]:
+    """Recognize one JPG/PNG/TIFF directly and retain a reproducible input report."""
+    audiveris = find_audiveris(project_root)
+    if not audiveris:
+        raise FileNotFoundError("Audiveris não encontrado; execute `rescore doctor`")
+    prepared = output_dir / "pages" / "page-0001.png"
+    image_report = prepare_omr_image(
+        image_path, prepared, max_pixels=OMR_RENDER_MAX_PIXELS
+    )
+    report_path = output_dir / "image-preprocess.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
+        json.dumps(image_report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    candidates = _run_scan_aware_audiveris(
+        audiveris,
+        prepared,
+        [1],
+        output_dir / "audiveris",
+        output_dir / "audiveris.log",
+        force=force,
+        scan_profile=scan_profile,
+        rendered=[prepared],
+        scan_reports=[image_report],
+    )
+    if not candidates:
+        raise RuntimeError("Audiveris terminou sem produzir arquivo .mxl")
+    candidate = max(candidates, key=lambda item: item.stat().st_mtime)
+    return {"candidate": str(candidate.resolve()), "preprocess": image_report}
 
 
 def convert_with_musescore(

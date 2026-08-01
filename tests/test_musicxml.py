@@ -33,6 +33,21 @@ class MusicXmlTests(unittest.TestCase):
         )
         report = compare_scores(score, score)
         self.assertEqual(report["global_note_rhythm"]["f1"], 1.0)
+        self.assertEqual(report["staff_position_note_rhythm"]["f1"], 1.0)
+
+    def test_position_metric_does_not_depend_on_part_names(self):
+        with tempfile.TemporaryDirectory() as directory:
+            reference_path = Path(directory) / "reference.musicxml"
+            candidate_path = Path(directory) / "candidate.musicxml"
+            reference_path.write_text(SCORE, encoding="utf-8")
+            candidate_path.write_text(
+                SCORE.replace("Flute 1", "Anonymous part"), encoding="utf-8"
+            )
+            report = compare_scores(
+                parse_musicxml(reference_path), parse_musicxml(candidate_path)
+            )
+        self.assertEqual(report["staff_position_note_rhythm"]["f1"], 1.0)
+        self.assertEqual(report["instrument_note_rhythm"]["f1"], 0.0)
 
 
 if __name__ == "__main__":
