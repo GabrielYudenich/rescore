@@ -141,11 +141,30 @@ Renderizar páginas sem executar OMR:
 rescore render "partitura.pdf" --pages 1-3 --dpi 300
 ```
 
+Reconhecer diretamente uma foto ou digitalização:
+
+```powershell
+rescore omr-image "pagina.jpg" --output output/pagina
+```
+
+No pipeline de OMR, páginas com dimensões físicas incorretas ou excepcionalmente
+grandes são reduzidas automaticamente para permanecer abaixo do limite seguro do
+Audiveris. A escala é uniforme em todo o intervalo solicitado.
+
 Comparar dois arquivos:
 
 ```powershell
 rescore compare referencia.musicxml candidato.mxl `
   --output output/comparacao.json
+```
+
+A comparação informa três métricas: global, por ordem vertical anônima das partes
+e por nome normalizado de instrumento. Para isolar os compassos que aparecem em
+uma página sem perder clave, armadura, fórmula ou divisões herdadas:
+
+```powershell
+rescore score-slice referencia.musicxml --start 13 --end 23 `
+  --output output/referencia-pagina-2.musicxml
 ```
 
 Outros comandos:
@@ -155,6 +174,8 @@ rescore doctor
 rescore hardware
 rescore inspect-mscz arquivo.mscz
 rescore canonicalize arquivo.mxl --output partitura.json
+rescore omr-image pagina.jpg --output output/pagina
+rescore score-slice referencia.musicxml --start 13 --end 23 --output trecho.musicxml
 rescore normalize-scherzo candidato.mxl modelo.musicxml
 rescore dataset-init data/meu-conjunto
 rescore dataset-validate data/meu-conjunto
