@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "created_at": "2026-08-02T01:53:43.066203+00:00",
+  "summary": {
+    "candidates": 2,
+    "strong_candidates": 1,
+    "training_eligible": 0,
+    "errors": 0
+  },
+  "candidates": [
+    {
+      "candidate_id": "pair-127146dea219b9a03545ed85",
+      "group_id": "grp-98785aa9aad1622726912f0b",
+      "pdf_assets": 8,
+      "editable_assets": 3,
+      "editable_formats": {
+        "mscz": 3
+      },
+      "containers": {
+        "file": 5,
+        "archive": 6
+      },
+      "matched_assets": 3,
+      "confidence": "strong-cardinality",
+      "review_state": "candidate-unverified",
+      "training_eligible": false
+    },
+    {
+      "candidate_id": "pair-a06a0a01235f12afbf8013b3",
+      "group_id": "grp-c96e91d5ecd3573d8b5677d4",
+      "pdf_assets": 12,
+      "editable_assets": 1,
+      "editable_formats": {
+        "mus": 1
+      },
+      "containers": {
+        "file": 13
+      },
+      "matched_assets": 0,
+      "confidence": "partial-or-legacy",
+      "review_state": "candidate-unverified",
+      "training_eligible": false
+    }
+  ]
+}

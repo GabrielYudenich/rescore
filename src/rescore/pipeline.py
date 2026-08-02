@@ -14,7 +14,7 @@ from .choros9 import (
     merge_measure_candidates,
     replace_choros9_family_parts,
 )
-from .images import prepare_omr_image
+from .images import normalize_score_orientation, prepare_omr_image
 from .mscz import (
     extract_score_style,
     graft_reference_measures,
@@ -390,16 +390,16 @@ def _render_omr_pages(
     scan_profile: bool,
 ) -> tuple[list[Path], list[dict]]:
     if not scan_profile:
-        return (
-            render_pages(
-                pdf_path,
-                page_spec,
-                output_dir / "pages",
-                dpi=dpi,
-                max_pixels=OMR_RENDER_MAX_PIXELS,
-            ),
-            [],
+        rendered = render_pages(
+            pdf_path,
+            page_spec,
+            output_dir / "pages",
+            dpi=dpi,
+            max_pixels=OMR_RENDER_MAX_PIXELS,
         )
+        for page in rendered:
+            normalize_score_orientation(page)
+        return rendered, []
     raw_pages = render_pages(
         pdf_path,
         page_spec,

@@ -180,6 +180,10 @@ rescore normalize-scherzo candidato.mxl modelo.musicxml
 rescore dataset-init data/meu-conjunto
 rescore corpus-feed alimentar --output data/visual-curriculum
 rescore corpus-curriculum-validate data/visual-curriculum/visual-curriculum.json
+rescore corpus-discover-pairs alimentar --output data/supervised-discovery
+rescore corpus-omr-probe --curriculum data/visual-curriculum/visual-curriculum.json --private-map data/visual-curriculum/private-map.json --output data/omr-probes
+rescore corpus-benchmark --curriculum data/visual-curriculum/visual-curriculum.json --pairs data/supervised-discovery/supervised-candidates.json --probes data/omr-probes/omr-probes.json --output data/benchmark-v1.json
+rescore privacy-audit data/benchmark-v1.json
 rescore dataset-validate data/meu-conjunto
 rescore dataset-align data/meu-conjunto --id meu-item --page-measures 8,8
 rescore alignment-validate data/meu-conjunto/items/meu-item/alignment/measure-regions.json

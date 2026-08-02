@@ -1,0 +1,272 @@
+{
+  "schema_version": "1.0",
+  "created_at": "2026-08-02T02:13:17.959959+00:00",
+  "curriculum": {
+    "documents": 964,
+    "samples": 2106,
+    "groups": 16,
+    "splits": {
+      "train": 1447,
+      "test": 328,
+      "validation": 331
+    },
+    "origins": {
+      "raster": 1852,
+      "digital": 254
+    },
+    "style_clusters": {
+      "0": 415,
+      "1": 119,
+      "10": 253,
+      "11": 56,
+      "2": 203,
+      "3": 173,
+      "4": 354,
+      "5": 89,
+      "6": 127,
+      "7": 197,
+      "8": 43,
+      "9": 77
+    },
+    "errors": 0,
+    "cached_documents": 964
+  },
+  "supervised_discovery": {
+    "candidates": 2,
+    "strong_candidates": 1,
+    "training_eligible": 0,
+    "errors": 0
+  },
+  "omr_probes": {
+    "total": 12,
+    "recognized": 9,
+    "failed": 3,
+    "recognition_rate": 0.75,
+    "elapsed_seconds": 619.361,
+    "pitched_events": 1127,
+    "failed_clusters": [
+      6,
+      8,
+      11
+    ],
+    "probes": [
+      {
+        "cluster": 0,
+        "sample_id": "sample-a1691350534edf5cb7aa5a46",
+        "split": "test",
+        "origin": "raster",
+        "distance": 0.449768,
+        "status": "recognized",
+        "elapsed_seconds": 103.965,
+        "metrics": {
+          "parts": 1,
+          "measures": 41,
+          "pitched_events": 83,
+          "time_signatures": 1
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 1,
+        "sample_id": "sample-2f4d43aa24e9387eabf1f43b",
+        "split": "test",
+        "origin": "raster",
+        "distance": 1.051848,
+        "status": "recognized",
+        "elapsed_seconds": 144.945,
+        "metrics": {
+          "parts": 2,
+          "measures": 49,
+          "pitched_events": 98,
+          "time_signatures": 0
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 2,
+        "sample_id": "sample-57594476c22233885cc824fa",
+        "split": "validation",
+        "origin": "raster",
+        "distance": 1.752979,
+        "status": "recognized",
+        "elapsed_seconds": 40.989,
+        "metrics": {
+          "parts": 2,
+          "measures": 44,
+          "pitched_events": 172,
+          "time_signatures": 0
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 3,
+        "sample_id": "sample-d3443f54204c0551692e643e",
+        "split": "test",
+        "origin": "digital",
+        "distance": 0.223543,
+        "status": "recognized",
+        "elapsed_seconds": 10.168,
+        "metrics": {
+          "parts": 1,
+          "measures": 8,
+          "pitched_events": 7,
+          "time_signatures": 0
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 4,
+        "sample_id": "sample-e838bc4ddb21d3f59c40844e",
+        "split": "test",
+        "origin": "raster",
+        "distance": 0.582614,
+        "status": "recognized",
+        "elapsed_seconds": 51.865,
+        "metrics": {
+          "parts": 2,
+          "measures": 26,
+          "pitched_events": 121,
+          "time_signatures": 0
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 5,
+        "sample_id": "sample-a2b96ee334aaa00f9fcac428",
+        "split": "test",
+        "origin": "raster",
+        "distance": 0.702349,
+        "status": "recognized",
+        "elapsed_seconds": 34.237,
+        "metrics": {
+          "parts": 1,
+          "measures": 43,
+          "pitched_events": 126,
+          "time_signatures": 1
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 6,
+        "sample_id": "sample-79770ae26a59b8e21ff2a92c",
+        "split": "test",
+        "origin": "raster",
+        "distance": 1.913388,
+        "status": "failed",
+        "elapsed_seconds": 2.402,
+        "metrics": {
+          "parts": 0,
+          "measures": 0,
+          "pitched_events": 0,
+          "time_signatures": 0
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 7,
+        "sample_id": "sample-b324c6ed15f56a01680a530a",
+        "split": "test",
+        "origin": "raster",
+        "distance": 0.547119,
+        "status": "recognized",
+        "elapsed_seconds": 25.704,
+        "metrics": {
+          "parts": 1,
+          "measures": 23,
+          "pitched_events": 13,
+          "time_signatures": 0
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 8,
+        "sample_id": "sample-d6c7bf6fd5a303ff2797e5b7",
+        "split": "test",
+        "origin": "raster",
+        "distance": 3.785601,
+        "status": "failed",
+        "elapsed_seconds": 45.864,
+        "metrics": {
+          "parts": 0,
+          "measures": 0,
+          "pitched_events": 0,
+          "time_signatures": 0
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 9,
+        "sample_id": "sample-431981d85b202612e08a3074",
+        "split": "test",
+        "origin": "raster",
+        "distance": 0.657063,
+        "status": "recognized",
+        "elapsed_seconds": 48.868,
+        "metrics": {
+          "parts": 2,
+          "measures": 22,
+          "pitched_events": 332,
+          "time_signatures": 0
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 10,
+        "sample_id": "sample-a274b4940e3ae807905085bb",
+        "split": "test",
+        "origin": "raster",
+        "distance": 0.585176,
+        "status": "recognized",
+        "elapsed_seconds": 45.495,
+        "metrics": {
+          "parts": 1,
+          "measures": 40,
+          "pitched_events": 175,
+          "time_signatures": 0
+        },
+        "training_eligible": false
+      },
+      {
+        "cluster": 11,
+        "sample_id": "sample-c87d96e905368fa7656e7fc2",
+        "split": "validation",
+        "origin": "raster",
+        "distance": 3.746819,
+        "status": "failed",
+        "elapsed_seconds": 64.859,
+        "metrics": {
+          "parts": 0,
+          "measures": 0,
+          "pitched_events": 0,
+          "time_signatures": 0
+        },
+        "training_eligible": false
+      }
+    ]
+  },
+  "ground_truth_policy": {
+    "automatic_omr_is_training_eligible": false,
+    "required": [
+      "human-reviewed",
+      "human-transcribed"
+    ]
+  },
+  "verified_digital_anchor": {
+    "global_note_rhythm": {
+      "reference": 306,
+      "candidate": 310,
+      "matched": 290,
+      "precision": 0.935484,
+      "recall": 0.947712,
+      "f1": 0.941558
+    },
+    "staff_position_note_rhythm": {
+      "reference": 306,
+      "candidate": 310,
+      "matched": 289,
+      "precision": 0.932258,
+      "recall": 0.944444,
+      "f1": 0.938312
+    }
+  }
+}
