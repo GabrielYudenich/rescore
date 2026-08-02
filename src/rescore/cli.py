@@ -39,6 +39,7 @@ from .pipeline import convert, extract_image_omr_candidate
 from .privacy_audit import audit_public_json
 from .projects import create_review_project, promote_project_run
 from .review import review_dataset_alignment
+from .score_repair import parse_meter_changes, repair_score_structure
 from .score_slice import slice_musicxml
 from .staff_alignment import align_dataset_staffs, validate_staff_alignment
 from .tooling import doctor
@@ -113,6 +114,22 @@ def build_parser() -> argparse.ArgumentParser:
     slice_parser.add_argument("--start", type=int, required=True)
     slice_parser.add_argument("--end", type=int, required=True)
     slice_parser.add_argument("--output", type=Path, required=True)
+
+    repair_parser = subparsers.add_parser(
+        "score-repair",
+        help="restaura compassos, pausas vazias e remove claves redundantes",
+    )
+    repair_parser.add_argument("score", type=Path)
+    repair_parser.add_argument("--output", type=Path, required=True)
+    repair_parser.add_argument(
+        "--meter-change",
+        action="append",
+        required=True,
+        metavar="MEDIDA=4/4",
+        help="mudança de compasso; pode ser repetida",
+    )
+    repair_parser.add_argument("--keep-redundant-clefs", action="store_true")
+    repair_parser.add_argument("--keep-empty-measures", action="store_true")
 
     image_omr_parser = subparsers.add_parser(
         "omr-image", help="reconhece diretamente uma imagem JPG, PNG ou TIFF"
@@ -474,6 +491,14 @@ def main(argv: list[str] | None = None) -> int:
                 )
         elif args.command == "score-slice":
             result = slice_musicxml(args.score, args.output, args.start, args.end)
+        elif args.command == "score-repair":
+            result = repair_score_structure(
+                args.score,
+                args.output,
+                parse_meter_changes(args.meter_change),
+                remove_redundant_clefs=not args.keep_redundant_clefs,
+                fill_empty_measures=not args.keep_empty_measures,
+            )
         elif args.command == "omr-image":
             result = extract_image_omr_candidate(
                 project_root,
