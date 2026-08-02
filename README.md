@@ -178,6 +178,8 @@ rescore omr-image pagina.jpg --output output/pagina
 rescore score-slice referencia.musicxml --start 13 --end 23 --output trecho.musicxml
 rescore normalize-scherzo candidato.mxl modelo.musicxml
 rescore dataset-init data/meu-conjunto
+rescore corpus-feed alimentar --output data/visual-curriculum
+rescore corpus-curriculum-validate data/visual-curriculum/visual-curriculum.json
 rescore dataset-validate data/meu-conjunto
 rescore dataset-align data/meu-conjunto --id meu-item --page-measures 8,8
 rescore alignment-validate data/meu-conjunto/items/meu-item/alignment/measure-regions.json
