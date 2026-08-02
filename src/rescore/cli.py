@@ -8,6 +8,11 @@ from pathlib import Path
 from .alignment import align_dataset_item, validate_alignment
 from .community import prepare_contribution, submit_contribution
 from .corpus import build_anonymous_inventory
+from .corpus_learning import (
+    build_visual_curriculum,
+    rebalance_visual_curriculum,
+    validate_visual_curriculum,
+)
 from .dataset import (
     add_pair,
     initialize_dataset,
@@ -384,6 +389,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     corpus_inventory.add_argument("source", type=Path)
     corpus_inventory.add_argument("--output", type=Path, required=True)
+    corpus_feed = subparsers.add_parser(
+        "corpus-feed",
+        help="extrai um currículo visual anônimo e separações sem vazamento",
+    )
+    corpus_feed.add_argument("source", type=Path)
+    corpus_feed.add_argument("--output", type=Path, required=True)
+    corpus_feed.add_argument("--pages-per-document", type=int, default=3)
+    corpus_feed.add_argument("--clusters", type=int, default=12)
+    corpus_validate = subparsers.add_parser(
+        "corpus-curriculum-validate", help="valida privacidade, features e splits do currículo"
+    )
+    corpus_validate.add_argument("path", type=Path)
+    corpus_rebalance = subparsers.add_parser(
+        "corpus-curriculum-rebalance", help="rebalanceia splits mantendo grupos inteiros"
+    )
+    corpus_rebalance.add_argument("path", type=Path)
     return parser
 
 
@@ -597,6 +618,17 @@ def main(argv: list[str] | None = None) -> int:
             result = submit_contribution(args.package, args.endpoint)
         elif args.command == "corpus-inventory":
             result = build_anonymous_inventory(args.source, args.output)
+        elif args.command == "corpus-feed":
+            result = build_visual_curriculum(
+                args.source,
+                args.output,
+                pages_per_document=args.pages_per_document,
+                clusters=args.clusters,
+            )
+        elif args.command == "corpus-curriculum-validate":
+            result = validate_visual_curriculum(args.path)
+        elif args.command == "corpus-curriculum-rebalance":
+            result = rebalance_visual_curriculum(args.path)
         else:
             parser.error(f"comando desconhecido: {args.command}")
             return 2
