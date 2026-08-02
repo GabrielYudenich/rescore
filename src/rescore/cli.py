@@ -8,11 +8,14 @@ from pathlib import Path
 from .alignment import align_dataset_item, validate_alignment
 from .community import prepare_contribution, submit_contribution
 from .corpus import build_anonymous_inventory
+from .corpus_benchmark import build_corpus_benchmark
 from .corpus_learning import (
     build_visual_curriculum,
     rebalance_visual_curriculum,
     validate_visual_curriculum,
 )
+from .corpus_pairs import discover_supervised_candidates
+from .corpus_probe import run_corpus_omr_probes
 from .dataset import (
     add_pair,
     initialize_dataset,
@@ -33,6 +36,7 @@ from .musicxml import compare_scores, parse_musicxml, write_canonical
 from .normalize import build_normalized_musicxml
 from .pdf import pdf_info, render_pages
 from .pipeline import convert, extract_image_omr_candidate
+from .privacy_audit import audit_public_json
 from .projects import create_review_project, promote_project_run
 from .review import review_dataset_alignment
 from .score_slice import slice_musicxml
@@ -405,6 +409,32 @@ def build_parser() -> argparse.ArgumentParser:
         "corpus-curriculum-rebalance", help="rebalanceia splits mantendo grupos inteiros"
     )
     corpus_rebalance.add_argument("path", type=Path)
+    corpus_pairs = subparsers.add_parser(
+        "corpus-discover-pairs",
+        help="descobre pares potenciais de PDF e arquivos editáveis sem publicar nomes",
+    )
+    corpus_pairs.add_argument("source", type=Path)
+    corpus_pairs.add_argument("--output", type=Path, required=True)
+    corpus_probe = subparsers.add_parser(
+        "corpus-omr-probe", help="mede o OMR em representantes anônimos dos clusters"
+    )
+    corpus_probe.add_argument("--curriculum", type=Path, required=True)
+    corpus_probe.add_argument("--private-map", type=Path, required=True)
+    corpus_probe.add_argument("--output", type=Path, required=True)
+    corpus_probe.add_argument("--limit", type=int)
+    corpus_benchmark = subparsers.add_parser(
+        "corpus-benchmark", help="consolida currículo, pares e probes em um benchmark"
+    )
+    corpus_benchmark.add_argument("--curriculum", type=Path, required=True)
+    corpus_benchmark.add_argument("--pairs", type=Path, required=True)
+    corpus_benchmark.add_argument("--probes", type=Path, required=True)
+    corpus_benchmark.add_argument("--digital-comparison", type=Path)
+    corpus_benchmark.add_argument("--output", type=Path, required=True)
+    privacy_audit = subparsers.add_parser(
+        "privacy-audit", help="audita um JSON antes da publicação"
+    )
+    privacy_audit.add_argument("path", type=Path)
+    privacy_audit.add_argument("--forbid", action="append", default=[])
     return parser
 
 
@@ -629,6 +659,26 @@ def main(argv: list[str] | None = None) -> int:
             result = validate_visual_curriculum(args.path)
         elif args.command == "corpus-curriculum-rebalance":
             result = rebalance_visual_curriculum(args.path)
+        elif args.command == "corpus-discover-pairs":
+            result = discover_supervised_candidates(args.source, args.output)
+        elif args.command == "corpus-omr-probe":
+            result = run_corpus_omr_probes(
+                project_root,
+                args.curriculum,
+                args.private_map,
+                args.output,
+                limit=args.limit,
+            )
+        elif args.command == "corpus-benchmark":
+            result = build_corpus_benchmark(
+                args.curriculum,
+                args.pairs,
+                args.probes,
+                args.output,
+                digital_comparison=args.digital_comparison,
+            )
+        elif args.command == "privacy-audit":
+            result = audit_public_json(args.path, args.forbid)
         else:
             parser.error(f"comando desconhecido: {args.command}")
             return 2

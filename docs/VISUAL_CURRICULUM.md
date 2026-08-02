@@ -21,11 +21,42 @@ modelo de clusters é ajustado apenas com `train`; `validation` e `test` não
 participam do ajuste. Documentos do mesmo grupo nunca aparecem em splits
 diferentes.
 
+Execuções posteriores usam o manifesto e as miniaturas privadas como cache. Um
+documento é reutilizado somente quando hash, páginas amostradas e miniaturas
+coincidem. No primeiro corpus público, a repetição caiu de aproximadamente 290
+segundos para menos de 6 segundos, reutilizando 964 documentos.
+
 Valide sempre um currículo antes de usá-lo:
 
 ```powershell
 rescore corpus-curriculum-validate `
   data/visual-curriculum/visual-curriculum.json
+```
+
+Descubra fontes potenciais de supervisão e execute probes por estilo:
+
+```powershell
+rescore corpus-discover-pairs alimentar --output data/supervised-discovery
+rescore corpus-omr-probe `
+  --curriculum data/visual-curriculum/visual-curriculum.json `
+  --private-map data/visual-curriculum/private-map.json `
+  --output data/omr-probes
+```
+
+Os probes são retomáveis e usam a página original, não a miniatura. Antes do OMR,
+o pipeline detecta pautas predominantemente verticais e corrige páginas giradas
+90 graus. O primeiro benchmark reconheceu 9 de 12 estilos; grade muito reduzida,
+impressão degradada e manuscrito permanecem como regressões explícitas.
+
+Consolide e audite os resultados públicos:
+
+```powershell
+rescore corpus-benchmark `
+  --curriculum data/visual-curriculum/visual-curriculum.json `
+  --pairs data/supervised-discovery/supervised-candidates.json `
+  --probes data/omr-probes/omr-probes.json `
+  --output data/benchmark-v1.json
+rescore privacy-audit data/benchmark-v1.json
 ```
 
 `unlabeled-visual` e `self-supervised-only` significam que a página ensina

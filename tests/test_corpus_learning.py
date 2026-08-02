@@ -41,6 +41,8 @@ class CorpusLearningTests(unittest.TestCase):
                 )
             self.assertTrue(validate_visual_curriculum(output / "visual-curriculum.json")["valid"])
             self.assertTrue(rebalance_visual_curriculum(output / "visual-curriculum.json")["valid"])
+            cached = build_visual_curriculum(source, output, clusters=2)
+            self.assertEqual(cached["summary"]["cached_documents"], 6)
 
 
 if __name__ == "__main__":

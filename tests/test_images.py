@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from rescore.images import prepare_omr_image
+from rescore.images import normalize_score_orientation, prepare_omr_image
 
 
 class ImageTests(unittest.TestCase):
@@ -20,6 +20,19 @@ class ImageTests(unittest.TestCase):
                 self.assertLessEqual(image.width * image.height, 500_000)
             self.assertTrue(report["resized"])
             self.assertEqual(report["original_size"], [2000, 1000])
+
+    def test_rotates_vertical_staff_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sideways.png"
+            image = Image.new("RGB", (600, 800), "white")
+            for x in range(100, 500, 20):
+                for y in range(50, 750):
+                    image.putpixel((x, y), (0, 0, 0))
+            image.save(path)
+            report = normalize_score_orientation(path)
+            with Image.open(path) as oriented:
+                self.assertEqual(oriented.size, (800, 600))
+            self.assertIn(report["rotation_degrees"], {-90, 90})
 
 
 if __name__ == "__main__":

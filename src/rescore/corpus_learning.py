@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -233,6 +234,21 @@ def build_visual_curriculum(
         if path.is_file() and path.suffix.casefold() in SUPPORTED
     )
     groups: dict[str, str] = {}
+    cached_by_content: dict[str, list[dict[str, Any]]] = {}
+    cached_private: dict[str, dict[str, Any]] = {}
+    public_cache = output / "visual-curriculum.json"
+    private_cache = output / "private-map.json"
+    if public_cache.is_file() and private_cache.is_file():
+        previous_public = json.loads(public_cache.read_text(encoding="utf-8"))
+        previous_private = json.loads(private_cache.read_text(encoding="utf-8"))
+        for record in previous_public.get("samples", []):
+            cached_by_content.setdefault(record["content_id"], []).append(record)
+        cached_private = {
+            record["sample_id"]: record
+            for record in previous_private.get("samples", [])
+            if record.get("sample_id")
+        }
+    cached_documents = 0
     for path in paths:
         if path.suffix.casefold() not in RASTER_SUFFIXES | {".pdf"}:
             continue
@@ -246,6 +262,33 @@ def build_visual_curriculum(
         content_id = f"sha256:{digest}"
         document_id = _anonymous_id("doc", digest)
         thumbnail_root = output / "private-thumbnails" / document_id
+        cached = cached_by_content.get(content_id, [])
+        if cached:
+            expected = min(int(cached[0].get("page_count", 0)), pages_per_document)
+            private_matches = [cached_private.get(record["sample_id"]) for record in cached]
+            if (
+                len(cached) == expected
+                and expected > 0
+                and all(
+                    match
+                    and Path(match["thumbnail"]).is_file()
+                    for match in private_matches
+                )
+            ):
+                for record, private_record in zip(cached, private_matches, strict=True):
+                    reused = copy.deepcopy(record)
+                    reused["group_id"] = group_id
+                    reused.pop("split", None)
+                    reused.pop("style_cluster", None)
+                    public_records.append(reused)
+                    private_records.append(
+                        {
+                            **private_record,
+                            "path": str(path),
+                        }
+                    )
+                cached_documents += 1
+                continue
         try:
             samples = (
                 _pdf_samples(path, pages_per_document, thumbnail_root)
@@ -294,10 +337,12 @@ def build_visual_curriculum(
             sorted(Counter(str(record["style_cluster"]) for record in public_records).items())
         ),
         "errors": sum("error" in record for record in private_records),
+        "cached_documents": cached_documents,
     }
     public = {
         "schema_version": "1.0",
         "created_at": datetime.now(UTC).isoformat(),
+        "sampling": {"pages_per_document": pages_per_document},
         "feature_names": list(FEATURE_NAMES),
         "visual_model": visual_model,
         "summary": summary,
