@@ -94,6 +94,102 @@ def _add_measure_rests(
     return inserted
 
 
+def _set_note_type(note: ET.Element, duration: int, divisions: int) -> None:
+    value = Fraction(duration, divisions)
+    names = {
+        Fraction(4): ("whole", 0),
+        Fraction(3): ("half", 1),
+        Fraction(2): ("half", 0),
+        Fraction(3, 2): ("quarter", 1),
+        Fraction(1): ("quarter", 0),
+        Fraction(3, 4): ("eighth", 1),
+        Fraction(1, 2): ("eighth", 0),
+        Fraction(3, 8): ("16th", 1),
+        Fraction(1, 4): ("16th", 0),
+        Fraction(1, 8): ("32nd", 0),
+    }
+    notation = names.get(value)
+    if notation is None:
+        return
+    duration_type, dots = notation
+    type_node = note.find("type")
+    if type_node is None:
+        type_node = ET.Element("type")
+        children = list(note)
+        position = next(
+            (
+                index
+                for index, child in enumerate(children)
+                if child.tag
+                in {
+                    "dot",
+                    "accidental",
+                    "time-modification",
+                    "stem",
+                    "notehead",
+                    "staff",
+                    "beam",
+                    "notations",
+                    "lyric",
+                }
+            ),
+            len(children),
+        )
+        note.insert(position, type_node)
+    type_node.text = duration_type
+    for dot in list(note.findall("dot")):
+        note.remove(dot)
+    position = list(note).index(type_node) + 1
+    for offset in range(dots):
+        note.insert(position + offset, ET.Element("dot"))
+
+
+def _clip_measure_overruns(
+    measure: ET.Element, divisions: int, meter: tuple[int, int]
+) -> tuple[int, int]:
+    limit = Fraction(divisions * meter[0] * 4, meter[1])
+    if limit.denominator != 1:
+        return 0, 0
+    cursor = Fraction(0)
+    previous_onset = Fraction(0)
+    previous_kept = True
+    removed = 0
+    clipped = 0
+    for child in list(measure):
+        if child.tag in {"backup", "forward"}:
+            movement = Fraction(int(child.findtext("duration", "0")))
+            cursor += movement if child.tag == "forward" else -movement
+            continue
+        if child.tag != "note" or child.find("grace") is not None:
+            continue
+        chord = child.find("chord") is not None
+        onset = previous_onset if chord else cursor
+        duration_node = child.find("duration")
+        duration = Fraction(int(duration_node.text)) if duration_node is not None else Fraction(0)
+        if chord and not previous_kept:
+            measure.remove(child)
+            removed += 1
+            continue
+        if onset >= limit:
+            measure.remove(child)
+            removed += 1
+            previous_kept = False
+            if not chord:
+                previous_onset = onset
+                cursor += duration
+            continue
+        previous_kept = True
+        if onset + duration > limit and duration_node is not None:
+            duration = limit - onset
+            duration_node.text = str(duration.numerator)
+            _set_note_type(child, duration.numerator, divisions)
+            clipped += 1
+        if not chord:
+            previous_onset = onset
+            cursor = onset + duration
+    return removed, clipped
+
+
 def repair_score_structure(
     source: Path,
     output: Path,
@@ -115,6 +211,8 @@ def repair_score_structure(
         "meter_events_inserted": 0,
         "redundant_clefs_removed": 0,
         "measure_rests_inserted": 0,
+        "overrun_notes_removed": 0,
+        "overrun_durations_clipped": 0,
         "meter_changes": {str(k): f"{v[0]}/{v[1]}" for k, v in meters.items()},
     }
     for part in root.findall("part"):
@@ -152,6 +250,12 @@ def repair_score_structure(
                 report["measure_rests_inserted"] += _add_measure_rests(
                     measure, divisions, current_meter, staves
                 )
+            if current_meter is not None:
+                removed, clipped = _clip_measure_overruns(
+                    measure, divisions, current_meter
+                )
+                report["overrun_notes_removed"] += removed
+                report["overrun_durations_clipped"] += clipped
 
             attributes = measure.find("attributes")
             if attributes is not None and len(attributes) == 0:

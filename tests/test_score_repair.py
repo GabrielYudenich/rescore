@@ -36,3 +36,23 @@ def test_parse_meter_changes():
         5: (3, 4),
         39: (4, 4),
     }
+
+
+def test_clips_musicxml_note_that_overruns_barline(tmp_path):
+    source = tmp_path / "source.musicxml"
+    output = tmp_path / "repaired.musicxml"
+    source.write_text(
+        """<score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list>
+<part id="P1"><measure number="1"><attributes><divisions>4</divisions></attributes>
+<note><pitch><step>C</step><octave>4</octave></pitch><duration>12</duration><voice>1</voice><type>half</type><dot/></note>
+<note><pitch><step>D</step><octave>4</octave></pitch><duration>8</duration><voice>1</voice><type>half</type></note>
+</measure></part></score-partwise>""",
+        encoding="utf-8",
+    )
+
+    result = repair_score_structure(source, output, {1: (4, 4)})
+
+    notes = ET.parse(output).getroot().findall(".//note")
+    assert [note.findtext("duration") for note in notes] == ["12", "4"]
+    assert notes[1].findtext("type") == "quarter"
+    assert result["overrun_durations_clipped"] == 1

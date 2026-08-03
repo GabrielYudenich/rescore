@@ -921,6 +921,9 @@ def normalize_mscz_voice_durations(
     meter_changes: dict[int, tuple[int, int]],
     end_measure: int,
     start_measure: int = 1,
+    *,
+    strict_clip: bool = False,
+    visible_padding: bool = False,
 ) -> dict:
     """Rebuild importer padding so every native MuseScore voice ends exactly.
 
@@ -1221,7 +1224,8 @@ def normalize_mscz_voice_durations(
             for dots in range(4):
                 if value == nominal:
                     rest = ET.SubElement(voice, "Rest")
-                    ET.SubElement(rest, "visible").text = "0"
+                    if not visible_padding:
+                        ET.SubElement(rest, "visible").text = "0"
                     if dots:
                         ET.SubElement(rest, "dots").text = str(dots)
                     ET.SubElement(rest, "durationType").text = duration_type
@@ -1293,6 +1297,35 @@ def normalize_mscz_voice_durations(
                         replacement = (current_duration - excess) / active_ratio
                         if replacement > 0 and set_notated_duration(last_chord_node, replacement):
                             cursor = expected
+                        elif strict_clip:
+                            # OCR occasionally duplicates or overextends the final
+                            # rhythmic items.  Native negative locations make the
+                            # score fail MuseScore's integrity check, so strict
+                            # output clips only the trailing overrun.
+                            while cursor > expected:
+                                rhythmic_indexes = [
+                                    index
+                                    for index, item in enumerate(prefix)
+                                    if item.tag in {"Chord", "Rest"}
+                                ]
+                                if not rhythmic_indexes:
+                                    break
+                                last_index = rhythmic_indexes[-1]
+                                item = prefix[last_index]
+                                before, _, item_ratio = cursor_after(prefix[:last_index])
+                                allowed = expected - before
+                                if allowed > 0 and set_notated_duration(
+                                    item, allowed / item_ratio
+                                ):
+                                    prefix = prefix[: last_index + 1]
+                                    cursor = expected
+                                else:
+                                    prefix.pop(last_index)
+                                    cursor, _, _ = cursor_after(prefix)
+                            # Discard empty tuplet wrappers left by a clipped
+                            # trailing OCR artefact.
+                            while prefix and prefix[-1].tag in {"Tuplet", "endTuplet"}:
+                                prefix.pop()
                         else:
                             # A malformed imported tuplet can lengthen a leading
                             # rest while all following notes retain their relative
@@ -1301,6 +1334,8 @@ def normalize_mscz_voice_durations(
                             correction = ET.Element("location")
                             ET.SubElement(correction, "fractions").text = str(-excess / 4)
                             cursor = expected
+                    if strict_clip:
+                        cursor, open_tuplets, active_ratio = cursor_after(prefix)
                     for item in list(voice):
                         voice.remove(item)
                     correction_inserted = False
